@@ -1,0 +1,54 @@
+"""저장 위치와 기본값."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+DEFAULT_DATA_DIR = "./data"
+DEFAULT_LIST_LIMIT = 10
+DEFAULT_TOP_N = 3
+BUDGET_WARNING_RATE = 80.0
+DEFAULT_CATEGORIES: tuple[str, ...] = (
+    "food",
+    "transport",
+    "rent",
+    "salary",
+    "shopping",
+    "etc",
+)
+
+
+@dataclass(frozen=True)
+class DataPaths:
+    """데이터 폴더 안의 파일 경로 묶음."""
+
+    root: Path
+
+    @property
+    def transactions(self) -> Path:
+        return self.root / "transactions.jsonl"
+
+    @property
+    def categories(self) -> Path:
+        return self.root / "categories.jsonl"
+
+    @property
+    def budgets(self) -> Path:
+        return self.root / "budgets.jsonl"
+
+    @property
+    def recurring(self) -> Path:
+        return self.root / "recurring.jsonl"
+
+    @property
+    def meta(self) -> Path:
+        return self.root / "meta.jsonl"
+
+    @property
+    def backups(self) -> Path:
+        return self.root / "backups"
+
+    @property
+    def data_files(self) -> tuple[Path, ...]:
+        return (self.transactions, self.categories, self.budgets, self.recurring, self.meta)
