@@ -196,12 +196,23 @@ class SearchCriteria:
     type: str | None = None
     keyword: str | None = None
     tag: str | None = None
+    min_amount: int | None = None
+    max_amount: int | None = None
 
     def __post_init__(self) -> None:
         if self.date_from and self.date_to and self.date_from > self.date_to:
             raise ValidationError(
                 f"시작일({self.date_from})이 종료일({self.date_to})보다 늦습니다.",
                 hint="--from 은 --to 보다 같거나 빠른 날짜여야 합니다.",
+            )
+        if (
+            self.min_amount is not None
+            and self.max_amount is not None
+            and self.min_amount > self.max_amount
+        ):
+            raise ValidationError(
+                f"최소 금액({self.min_amount:,})이 최대 금액({self.max_amount:,})보다 큽니다.",
+                hint="--min-amount 는 --max-amount 보다 같거나 작아야 합니다.",
             )
 
     def matches(self, tx: Transaction) -> bool:
@@ -216,6 +227,10 @@ class SearchCriteria:
         if self.keyword and self.keyword.lower() not in tx.memo.lower():
             return False
         if self.tag and self.tag not in tx.tags:
+            return False
+        if self.min_amount is not None and tx.amount < self.min_amount:
+            return False
+        if self.max_amount is not None and tx.amount > self.max_amount:
             return False
         return True
 

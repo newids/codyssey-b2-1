@@ -61,6 +61,8 @@ def cmd_search(args: argparse.Namespace, ctx: AppContext) -> int:
         type=_optional(args.type, parse_type),
         keyword=_optional(args.q, str.strip),
         tag=_optional(args.tag, str.strip),
+        min_amount=_optional(args.min_amount, parse_amount),
+        max_amount=_optional(args.max_amount, parse_amount),
     )
     limit = _optional(args.limit, lambda text: parse_positive_int(text, "--limit"))
     transactions = ctx.ledger.search(criteria, limit)

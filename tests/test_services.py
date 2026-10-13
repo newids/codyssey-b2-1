@@ -76,6 +76,23 @@ class LedgerTests(DataDirTestCase):
         self.assertEqual([tx.date for tx in limited], ["2024-02-01"])
         self.assertEqual(self.ledger.search(SearchCriteria(keyword="없는말")), [])
 
+    def test_search_filters_by_amount_range_inclusive(self) -> None:
+        self.ledger.add_transactions(
+            [expense("2024-03-01", 4999), expense("2024-03-02", 5000), expense("2024-03-03", 20000)]
+        )
+
+        at_least = self.ledger.search(SearchCriteria(min_amount=5000))
+        at_most = self.ledger.search(SearchCriteria(max_amount=5000))
+        between = self.ledger.search(SearchCriteria(min_amount=5000, max_amount=19999))
+
+        self.assertEqual([tx.amount for tx in at_least], [20000, 5000])
+        self.assertEqual([tx.amount for tx in at_most], [5000, 4999])
+        self.assertEqual([tx.amount for tx in between], [5000])
+
+    def test_search_rejects_min_amount_greater_than_max(self) -> None:
+        with self.assertRaises(ValidationError):
+            SearchCriteria(min_amount=10000, max_amount=9999)
+
     def test_update_changes_only_given_fields(self) -> None:
         self.seed()
 
