@@ -38,7 +38,7 @@ python -m budget_app summary --help    # 명령별 사용법
 | --- | --- | --- |
 | `add` | 대화형 | 거래 추가, 생성된 id 출력 |
 | `list [--limit N]` | 옵션 | 최신순 목록 (기본 10건) |
-| `search [--from] [--to] [--category] [--type] [--q] [--tag] [--limit]` | 옵션 | 조건 검색, 최신순 |
+| `search [--from] [--to] [--category] [--type] [--q] [--tag] [--min-amount] [--max-amount] [--limit]` | 옵션 | 조건 검색, 최신순. 금액 범위는 양 끝 포함 |
 | `summary --month YYYY-MM [--top N]` | 옵션 | 총수입/총지출/잔액, 예산 사용률, 지출 TOP N (기본 3) |
 | `budget set --month YYYY-MM --amount 금액` | 옵션 | 월 예산 저장 (`budget show --month`, `budget list` 로 조회) |
 | `category add [--name]` / `list` / `remove [--name] [--replace-with]` | 대화형 또는 옵션 | 카테고리 관리 |
@@ -81,6 +81,7 @@ TX-000010 | 2024-01-12 | expense | transport |   20000 |      |
 
 $ python -m budget_app search --from 2024-01-01 --to 2024-01-31 --category food --tag meal
 $ python -m budget_app search --type expense --q 점심 --limit 5
+$ python -m budget_app search --type expense --min-amount 50000      # 5만원 이상 지출만
 
 $ python -m budget_app budget set --month 2024-01 --amount 500000
 [저장 완료] 2024-01 예산 500000원

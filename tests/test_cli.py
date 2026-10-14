@@ -74,6 +74,23 @@ class CliFlowTests(DataDirTestCase):
         self.assertIn("조건에 맞는 거래가 없습니다", nothing.out)
         self.assertEqual(reversed_range.code, 1)
 
+    def test_search_by_amount_range(self) -> None:
+        for answers in (RENT, LUNCH, SALARY):
+            self.add(*answers)
+
+        large = self.run_cli("search", "--min-amount", "100,000")
+        small_expense = self.run_cli("search", "--type", "expense", "--max-amount", "15000")
+        inverted = self.run_cli("search", "--min-amount", "200", "--max-amount", "100")
+        invalid = self.run_cli("search", "--min-amount", "abc")
+
+        self.assertIn("(총 2건)", large.out)
+        self.assertNotIn("food", large.out)
+        self.assertIn("(총 1건)", small_expense.out)
+        self.assertIn("점심", small_expense.out)
+        self.assertEqual(inverted.code, 1)
+        self.assertIn("최소 금액", inverted.err)
+        self.assertEqual(invalid.code, 1)
+
     def test_budget_and_summary_with_warning(self) -> None:
         for answers in (RENT, LUNCH, SALARY):
             self.add(*answers)

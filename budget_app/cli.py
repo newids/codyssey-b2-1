@@ -111,6 +111,8 @@ def _add_report_commands(add_command) -> None:
     search.add_argument("--type", help="income 또는 expense")
     search.add_argument("--q", help="메모에 포함된 키워드")
     search.add_argument("--tag", help="태그")
+    search.add_argument("--min-amount", metavar="금액", help="이 금액 이상(포함)")
+    search.add_argument("--max-amount", metavar="금액", help="이 금액 이하(포함)")
     search.add_argument("--limit", help="출력 건수 (기본값: 전체)")
     search.set_defaults(handler=commands.cmd_search)
 
