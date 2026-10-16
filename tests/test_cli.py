@@ -201,6 +201,19 @@ class CliFlowTests(DataDirTestCase):
         self.assertIn("건너뜀 2행", imported.out)
         self.assertIn("외 2건", imported.out)
 
+    def test_strict_import_exits_with_error_and_writes_nothing(self) -> None:
+        source = self.work_dir / "mixed.csv"
+        source.write_text(
+            "date,type,category,amount\n2024-01-15,expense,food,1\n2024-99-99,expense,food,1\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_cli("import", "--from", str(source), "--strict")
+
+        self.assertEqual(result.code, 1)
+        self.assertIn("--strict", result.err)
+        self.assertIn("거래 내역이 없습니다", self.run_cli("list").out)
+
     def test_export_by_date_range_and_recurring_failure_report(self) -> None:
         for answers in (RENT, LUNCH):
             self.add(*answers)

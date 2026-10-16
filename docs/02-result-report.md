@@ -10,7 +10,7 @@
 | 필수 기능 10종 | 모두 구현 |
 | 보너스 4종 (백업, 반복 내역, 표 정렬, 저장 원자성) | 모두 구현 |
 | 외부 라이브러리 | 사용하지 않음 (표준 라이브러리만) |
-| 자동 테스트 | 91개 통과 (Python 3.13.5, 3.10.12 양쪽) |
+| 자동 테스트 | 97개 통과 (Python 3.13.5, 3.10.12 양쪽) |
 | 줄 실행률 | 전체 약 99% (표준 라이브러리 `trace` 로 측정, 모듈별 최저 80%) |
 | 코드 규모 | 앱 19개 파일 약 1,950줄, 테스트 약 1,060줄 |
 | 고정한 선택 | JSONL / `update` 옵션 방식 / 기본 카테고리 자동 생성 |
@@ -29,7 +29,7 @@
 | 6 | `category add/list/remove` (사용 중 처리) | `services.add_category`, `recurring.remove_category` | `test_category_commands`, `test_category_in_use_cannot_be_removed_without_replacement` |
 | 7 | `update --id` (옵션 방식 고정) | `commands.cmd_update`, `services.update_transaction` | `test_update_and_delete_by_id`, `test_update_failures_leave_data_untouched` |
 | 8 | `delete --id`, 없는 id 처리 | `services.delete_transaction` | `test_delete_removes_one_and_unknown_id_is_not_found` |
-| 9 | `import --from`, `export --out` + 건수 출력 | `csv_io.py` | `test_export_then_import_round_trips`, `test_import_skips_invalid_rows_with_reasons` |
+| 9 | `import --from`, `export --out` + 건수 출력 | `csv_io.py` | `test_export_then_import_round_trips`, `test_import_skips_invalid_rows_with_reasons`, `test_strict_import_registers_nothing_when_any_row_is_invalid` |
 | 10 | 3개 이상 파일로 영구 저장, README | `config.DataPaths`, `README.md` | `test_first_run_creates_files_and_default_categories` |
 
 ### 2.2 기능 요구사항 세부
@@ -265,9 +265,9 @@ $ python -m budget_app backup
 
 ```console
 $ python -m unittest discover -s tests -t .
-...........................................................................................
+.................................................................................................
 ----------------------------------------------------------------------
-Ran 91 tests in 0.541s
+Ran 97 tests in 0.723s
 
 OK
 ```
@@ -276,8 +276,8 @@ OK
 | --- | --- | --- |
 | `tests/test_validators_models.py` | 검증 함수, 모델 | 18 |
 | `tests/test_storage.py` | JSONL 입출력, 원자적 쓰기, 저장소 | 18 |
-| `tests/test_services.py` | 서비스, CSV, 반복 내역, 백업 | 25 |
-| `tests/test_cli.py` | 명령 실행(E2E), 데코레이터, 표 정렬 | 30 |
+| `tests/test_services.py` | 서비스, CSV, 반복 내역, 백업 | 29 |
+| `tests/test_cli.py` | 명령 실행(E2E), 데코레이터, 표 정렬 | 32 |
 
 - Python 3.13.5와 3.10.12에서 모두 통과했습니다.
 - 줄 실행률은 `python -m trace --count --missing` 으로 측정했습니다. 측정된 18개 모듈 중 15개가 100%이고,
@@ -312,6 +312,14 @@ OK
 | `... \| head -1` 에서 "Broken pipe" 오류 메시지 출력 | 메시지 없이 종료 |
 | 아랍 숫자 등 비 ASCII 숫자와 `1,5,0` 같은 쉼표를 금액으로 인정 | ASCII 숫자와 올바른 천 단위 쉼표만 허용 |
 | CSV 헤더의 대소문자·공백, 자모가 분리된 한글 카테고리명 불일치 | 헤더와 이름을 정규화해 비교 |
+
+## 7.1 평가항목 점검 후 보완 (2026-10-16)
+
+| 보완 | 내용 |
+| --- | --- |
+| `import --strict` 추가 | 부분 성공(기본)에 더해 롤백 방식을 제공. 잘못된 행이 하나라도 있으면 아무것도 등록하지 않고 종료 코드 1 |
+| `search --min-amount/--max-amount` | 금액 범위 검색 (PR #1) |
+| 평가 답변 보강 | 10만 건 병목/개선(Q15), 깨진 CSV 행 처리(Q16), 평가항목별 답변서([04-evaluation-checklist.md](04-evaluation-checklist.md)) |
 
 ## 8. 알려진 한계
 

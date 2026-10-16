@@ -234,6 +234,29 @@ class CsvTransferTests(DataDirTestCase):
         self.assertEqual(result.imported, 2)
         self.assertEqual([reason.split(":")[0] for reason in result.skipped], ["3행", "4행", "5행"])
 
+    def test_strict_import_registers_nothing_when_any_row_is_invalid(self) -> None:
+        self.csv_path.write_text(
+            "date,type,category,amount,memo,tags\n"
+            "2024-01-15,expense,food,15000,점심,meal\n"
+            "2024-13-40,expense,food,15000,,\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(ValidationError) as caught:
+            import_transactions(self.ledger, self.csv_path, strict=True)
+
+        self.assertIn("3행", caught.exception.message)
+        self.assertEqual(self.ledger.list_recent(10), [])
+
+    def test_strict_import_succeeds_when_every_row_is_valid(self) -> None:
+        self.csv_path.write_text(
+            "date,type,category,amount\n2024-01-15,expense,food,15000\n", encoding="utf-8"
+        )
+
+        result = import_transactions(self.ledger, self.csv_path, strict=True)
+
+        self.assertEqual((result.imported, result.skipped), (1, ()))
+
     def test_import_accepts_excel_bom_and_optional_columns_missing(self) -> None:
         self.csv_path.write_text(
             "date,type,category,amount\n2024-01-15,expense,food,15000\n", encoding="utf-8-sig"

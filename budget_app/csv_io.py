@@ -17,6 +17,7 @@ from .validators import parse_amount, parse_date, parse_tags, parse_type
 CSV_COLUMNS: tuple[str, ...] = ("date", "type", "category", "amount", "memo", "tags")
 REQUIRED_COLUMNS: tuple[str, ...] = ("date", "type", "category", "amount")
 TAG_SEPARATOR = ","
+MAX_STRICT_REASONS = 5
 # 엑셀이 저장한 UTF-8 파일의 BOM 도 읽을 수 있게 한다.
 CSV_READ_ENCODING = "utf-8-sig"
 
@@ -29,8 +30,15 @@ class ImportResult:
 
 @log_call
 @timed
-def import_transactions(ledger: BudgetService, source: Path) -> ImportResult:
-    """CSV 의 올바른 행만 등록하고, 잘못된 행은 사유와 함께 건너뛴다."""
+def import_transactions(
+    ledger: BudgetService, source: Path, strict: bool = False
+) -> ImportResult:
+    """CSV 의 거래를 일괄 등록한다.
+
+    기본(부분 성공): 올바른 행만 등록하고 잘못된 행은 사유와 함께 건너뛴다.
+    strict(롤백): 잘못된 행이 하나라도 있으면 아무것도 등록하지 않고 사유를 모두 알려 준다.
+    어느 쪽이든 검증을 모두 마친 뒤에 파일에 쓰므로, 검증 실패로 절반만 쓰이는 일은 없다.
+    """
     if not source.is_file():
         raise NotFoundError(
             f"가져올 파일을 찾을 수 없습니다: {source}", hint="--from 경로를 확인하세요."
@@ -42,6 +50,12 @@ def import_transactions(ledger: BudgetService, source: Path) -> ImportResult:
             valid.append(_row_to_input(ledger, row))
         except ValidationError as error:
             skipped.append(f"{row_number}행: {error.message}")
+    if strict and skipped:
+        raise ValidationError(
+            f"잘못된 행이 {len(skipped)}건 있어 아무것도 등록하지 않았습니다 (--strict). "
+            + " / ".join(skipped[:MAX_STRICT_REASONS]),
+            hint="해당 행을 고친 뒤 다시 실행하거나, --strict 없이 실행해 올바른 행만 등록하세요.",
+        )
     created = ledger.add_transactions(valid)
     return ImportResult(imported=len(created), skipped=tuple(skipped))
 

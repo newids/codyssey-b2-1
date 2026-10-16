@@ -127,6 +127,11 @@ def _add_report_commands(add_command) -> None:
 def _add_transfer_commands(add_command) -> None:
     importing = add_command("import", "CSV 파일의 거래를 일괄 등록")
     importing.add_argument("--from", dest="source", required=True, metavar="CSV", help="가져올 CSV")
+    importing.add_argument(
+        "--strict",
+        action="store_true",
+        help="잘못된 행이 하나라도 있으면 아무것도 등록하지 않음 (기본: 올바른 행만 등록)",
+    )
     importing.set_defaults(handler=commands.cmd_import)
 
     export = add_command("export", "조건에 맞는 거래를 CSV 로 저장")

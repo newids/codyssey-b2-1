@@ -9,6 +9,7 @@ Python 표준 라이브러리만으로 만든 파일 기반 콘솔 가계부입�
 | [docs/01-mission-guide.md](docs/01-mission-guide.md) | 미션 수행 가이드 (요구사항 분석, 단계별 구현 순서, 핵심 개념) |
 | [docs/02-result-report.md](docs/02-result-report.md) | 수행 결과 보고서 (요구사항 충족표, 실행 화면, 테스트 결과) |
 | [docs/03-evaluation-answers.md](docs/03-evaluation-answers.md) | 평가 답변서 (과제 목표 5문항 + 예상 질문) |
+| [docs/04-evaluation-checklist.md](docs/04-evaluation-checklist.md) | 평가항목 체크리스트별 답변과 근거 위치 |
 
 ## 1. 실행 방법
 
@@ -44,7 +45,7 @@ python -m budget_app summary --help    # 명령별 사용법
 | `category add [--name]` / `list` / `remove [--name] [--replace-with]` | 대화형 또는 옵션 | 카테고리 관리 |
 | `update --id ID [--date] [--type] [--category] [--amount] [--memo] [--tags]` | **옵션 방식으로 고정** | 지정한 항목만 수정 |
 | `delete --id ID` | 옵션 | 거래 삭제 |
-| `import --from CSV` | 옵션 | CSV 일괄 등록 |
+| `import --from CSV [--strict]` | 옵션 | CSV 일괄 등록 (`--strict`: 잘못된 행이 있으면 전부 취소) |
 | `export --out CSV (--month YYYY-MM \| --from/--to)` | 옵션 | 조건에 맞는 거래를 CSV로 저장 |
 | `backup` | - | 데이터 파일을 타임스탬프 폴더로 백업 (보너스) |
 | `recurring add/list/remove/apply` | 옵션 | 반복 내역 등록과 월별 자동 생성 (보너스) |
@@ -111,6 +112,7 @@ $ python -m budget_app export --out export.csv --month 2024-01
 $ python -m budget_app export --out q1.csv --from 2024-01-01 --to 2024-03-31
 $ python -m budget_app import --from samples/import_sample.csv
 [완료] imported=7, skipped=0
+$ python -m budget_app import --from bank.csv --strict   # 잘못된 행이 있으면 전부 취소
 
 $ python -m budget_app backup
 $ python -m budget_app recurring add --day 25 --type income --category salary --amount 3000000 --memo 월급
@@ -156,7 +158,9 @@ date,type,category,amount,memo,tags
 2024-01-20,expense,food,18000,"저녁, 친구와","meal,friends"
 ```
 
-- `import` 는 올바른 행만 등록하고, 잘못된 행은 행 번호와 사유를 출력하며 건너뜁니다(`skipped`). 필수 컬럼이 헤더에 없으면 아무것도 등록하지 않고 오류로 끝납니다.
+- `import` 는 기본적으로 **부분 성공** 방식입니다. 올바른 행만 등록하고, 잘못된 행은 행 번호와 사유를 출력하며 건너뜁니다(`skipped`).
+- `import --strict` 는 **롤백** 방식입니다. 잘못된 행이 하나라도 있으면 아무것도 등록하지 않고 사유를 알려 줍니다. 어느 방식이든 모든 행을 검증한 뒤에 파일에 쓰므로 절반만 들어가는 일은 없습니다.
+- 필수 컬럼이 헤더에 없으면 아무것도 등록하지 않고 오류로 끝납니다.
 - `export` 는 `--month` 또는 `--from`/`--to` 중 한 가지 방식의 기간 조건이 반드시 필요합니다. 같은 경로의 파일이 있으면 덮어씁니다.
 - `export` 결과를 그대로 `import` 할 수 있습니다(id는 새로 발급됩니다).
 

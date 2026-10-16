@@ -152,7 +152,7 @@ def cmd_delete(args: argparse.Namespace, ctx: AppContext) -> int:
 
 
 def cmd_import(args: argparse.Namespace, ctx: AppContext) -> int:
-    result = import_transactions(ctx.ledger, Path(args.source))
+    result = import_transactions(ctx.ledger, Path(args.source), strict=args.strict)
     print(f"[완료] imported={result.imported}, skipped={len(result.skipped)}")
     for reason in result.skipped[:MAX_SKIP_REASONS_SHOWN]:
         print(f"  - 건너뜀 {reason}")
