@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from .app import AppContext
 from .backup import create_backup
+from .config import SEARCH_UNLIMITED_NOTICE_COUNT
 from .csv_io import export_transactions, import_transactions
 from .errors import EXIT_ERROR, EXIT_OK, NotFoundError, ValidationError
 from .formatter import format_recurring_rules, format_summary, format_transactions
@@ -69,6 +71,13 @@ def cmd_search(args: argparse.Namespace, ctx: AppContext) -> int:
     if not transactions:
         print("조건에 맞는 거래가 없습니다.")
         return EXIT_OK
+    if limit is None and len(transactions) > SEARCH_UNLIMITED_NOTICE_COUNT:
+        # 표보다 먼저 출력해 긴 결과에 밀려 안 보이는 일이 없게 한다(표준 오류라 결과와 섞이지 않는다).
+        print(
+            f"[안내] 결과가 {len(transactions)}건입니다. 다음부터 --limit N 을 주면 "
+            "최신 N건만 골라 메모리와 출력량을 줄일 수 있습니다.",
+            file=sys.stderr,
+        )
     print("\n".join(format_transactions(transactions)))
     print(f"(총 {len(transactions)}건)")
     return EXIT_OK

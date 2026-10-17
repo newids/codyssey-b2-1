@@ -6,15 +6,18 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-from typing import NoReturn, Sequence
+from typing import Callable, NoReturn, Sequence, cast
 
 from . import commands
-from .app import create_app
+from .app import AppContext, create_app
 from .config import DEFAULT_DATA_DIR, DEFAULT_LIST_LIMIT, DEFAULT_TOP_N
 from .decorators import format_error, handle_errors
 from .errors import EXIT_USAGE
 
 PROGRAM = "python -m budget_app"
+
+CommandHandler = Callable[[argparse.Namespace, AppContext], int]
+AddCommand = Callable[[str, str], argparse.ArgumentParser]
 
 
 class KoreanArgumentParser(argparse.ArgumentParser):
@@ -38,7 +41,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ctx = create_app(Path(args.data_dir))
     for notice in ctx.notices:
         print(f"[안내] {notice}", file=sys.stderr)
-    return args.handler(args, ctx)
+    handler = cast(CommandHandler, args.handler)
+    return handler(args, ctx)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -68,9 +72,9 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _common_options() -> argparse.ArgumentParser:
+def _common_options() -> KoreanArgumentParser:
     """모든 하위 명령 뒤에서도 쓸 수 있는 공통 옵션."""
-    common = argparse.ArgumentParser(add_help=False)
+    common = KoreanArgumentParser(add_help=False)
     common.add_argument("--data-dir", default=argparse.SUPPRESS, help="저장 폴더")
     common.add_argument(
         "--verbose", action="store_true", default=argparse.SUPPRESS, help="실행 로그 출력"
@@ -78,7 +82,7 @@ def _common_options() -> argparse.ArgumentParser:
     return common
 
 
-def _add_transaction_commands(add_command) -> None:
+def _add_transaction_commands(add_command: AddCommand) -> None:
     add = add_command("add", "거래 추가 (대화형 입력)")
     add.set_defaults(handler=commands.cmd_add)
 
@@ -97,7 +101,7 @@ def _add_transaction_commands(add_command) -> None:
     delete.set_defaults(handler=commands.cmd_delete)
 
 
-def _add_report_commands(add_command) -> None:
+def _add_report_commands(add_command: AddCommand) -> None:
     listing = add_command("list", "거래 목록 (최신순)")
     listing.add_argument(
         "--limit", default=str(DEFAULT_LIST_LIMIT), help=f"출력 건수 (기본값: {DEFAULT_LIST_LIMIT})"
@@ -113,7 +117,10 @@ def _add_report_commands(add_command) -> None:
     search.add_argument("--tag", help="태그")
     search.add_argument("--min-amount", metavar="금액", help="이 금액 이상(포함)")
     search.add_argument("--max-amount", metavar="금액", help="이 금액 이하(포함)")
-    search.add_argument("--limit", help="출력 건수 (기본값: 전체)")
+    search.add_argument(
+        "--limit",
+        help="출력 건수 (기본값: 전체. 결과가 많을 때는 지정을 권장: 지정하면 최신 N건만 메모리에 둡니다)",
+    )
     search.set_defaults(handler=commands.cmd_search)
 
     summary = add_command("summary", "월별 요약 (수입/지출/잔액/예산/지출 TOP N)")
@@ -124,7 +131,7 @@ def _add_report_commands(add_command) -> None:
     summary.set_defaults(handler=commands.cmd_summary)
 
 
-def _add_transfer_commands(add_command) -> None:
+def _add_transfer_commands(add_command: AddCommand) -> None:
     importing = add_command("import", "CSV 파일의 거래를 일괄 등록")
     importing.add_argument("--from", dest="source", required=True, metavar="CSV", help="가져올 CSV")
     importing.add_argument(

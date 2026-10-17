@@ -122,6 +122,8 @@ $ python -m budget_app recurring apply --month 2024-02
 예산 사용률이 80% 이상이면 `[주의]`, 예산을 넘으면 `[경고] 예산을 N원 초과했습니다!` 가 함께 출력됩니다.
 거래가 없는 달은 `[YYYY-MM] 데이터 없음` 을 출력합니다.
 
+`[주의]` 기준(80%)은 `budget_app/config.py` 의 `BUDGET_WARNING_RATE` 상수로 바꿉니다. 한 사람이 쓰는 프로그램이라 별도 설정 파일이나 옵션으로는 두지 않았습니다.
+
 ## 4. 저장 파일 위치와 형식
 
 기본 위치는 `./data` 이며 `--data-dir` 로 바꿀 수 있습니다. 모든 파일은 UTF-8 JSONL(한 줄에 JSON 객체 하나)입니다.
@@ -138,6 +140,22 @@ $ python -m budget_app recurring apply --month 2024-02
 - 거래 id는 `TX-000001` 형식의 일련번호입니다. 삭제한 id는 다시 쓰지 않습니다.
 - 수정·삭제는 같은 폴더의 임시 파일에 전체를 다시 쓴 뒤 `os.replace` 로 교체합니다. 중간에 실패해도 원본은 그대로 남습니다.
 - 거래 파일은 한 줄씩 읽는 제너레이터로만 다루므로, 파일이 커져도 메모리 사용량이 늘지 않습니다.
+- 다시 쓴 파일은 원본의 권한(모드)을 그대로 이어받고, 임시 파일은 원본과 같은 폴더에 만듭니다. 데이터 폴더에 읽기·쓰기 권한만 있으면 되고, 다른 폴더나 시스템 임시 폴더는 쓰지 않습니다.
+
+### 백업과 복구
+
+`backup` 은 5개 파일을 `data/backups/<시각>/` 에 복사합니다. 복구는 그 폴더의 파일을 데이터 폴더로 다시 복사하면 됩니다.
+
+```console
+$ python -m budget_app backup
+[백업 완료] data/backups/20261017-152144 (5 files)
+
+$ cp data/backups/20261017-152144/*.jsonl data/      # 복구: 백업 시점으로 되돌리기
+$ python -m budget_app list --limit 3                 # 되돌아왔는지 확인
+```
+
+- 5개 파일을 **함께** 되돌리세요. `transactions.jsonl` 만 되돌리면 `meta.jsonl` 의 일련번호와 어긋나지는 않지만(번호는 건너뛸 뿐), 예산·카테고리는 복구 전 상태로 남습니다.
+- 복구는 프로그램이 실행 중이 아닐 때 합니다. 저장 파일이 깨져 `저장 파일을 읽을 수 없습니다: ... N번째 줄` 오류가 날 때도 같은 방법으로 되돌립니다.
 
 ## 5. import/export CSV 스키마
 
@@ -182,14 +200,55 @@ $ python -m budget_app delete --id TX-999999
 | 3 | 예기치 못한 내부 오류 |
 | 130 | 사용자가 Ctrl+C 로 중단 |
 
+셸에서 종료 코드는 `$?` 로 확인합니다. 스크립트에서는 `&&` / `||` 로 성공·실패를 분기할 수 있습니다.
+
+```console
+$ python -m budget_app delete --id TX-999999; echo "exit=$?"
+[오류] 없는 데이터입니다: id=TX-999999
+[힌트] list 또는 search 명령으로 id 를 확인하세요. (예: TX-000012)
+exit=1
+$ python -m budget_app import --from bank.csv --strict && echo "등록 완료" || echo "실패(코드 $?)"
+```
+
 대화형 입력(`add` 등)에서 잘못된 값을 넣으면 이유를 알려 주고 그 항목만 다시 묻습니다.
 
 `-` 로 시작하는 값은 옵션으로 오해받으므로 `--memo=-10%할인` 처럼 `=` 로 붙여 씁니다.
 
+### 자주 보는 오류와 해결
+
+| 메시지 | 원인 | 해결 |
+| --- | --- | --- |
+| `등록되지 않은 카테고리입니다: cafe` | 카테고리를 만들기 전에 사용 | `category add --name cafe` 뒤에 다시 실행 |
+| `없는 데이터입니다: id=TX-...` | 오타, 또는 이미 삭제한 id | `list` / `search` 로 id 확인 |
+| `'food' 카테고리를 사용하는 거래가 N건 있어 삭제할 수 없습니다.` | 사용 중인 카테고리 삭제 | `--replace-with <다른 카테고리>` 를 붙여 옮긴 뒤 삭제 |
+| `저장 파일을 읽을 수 없습니다: ... N번째 줄` | 손으로 고치다 JSON 한 줄이 깨짐 | 그 줄을 고치거나 `backups/` 의 복사본으로 복구 |
+| `파일을 처리할 수 없습니다: Permission denied (...)` | 데이터 폴더에 쓰기 권한 없음 | 폴더 권한 수정, 또는 `--data-dir` 로 다른 폴더 지정 |
+| `파일을 처리할 수 없습니다: No space left on device` | 디스크 가득 참 | 공간 확보 후 재실행. 덧붙이던 도중이었다면 그때까지의 행만 저장되고 id 는 겹치지 않음 |
+| `가져올 파일을 찾을 수 없습니다` / `CSV 헤더에 필수 컬럼이 없습니다` | 경로 오타, 헤더 누락 | 경로 확인, 첫 줄을 `date,type,category,amount,memo,tags` 로 |
+| `같은 시각의 백업이 이미 있습니다` | 1초 안에 `backup` 을 두 번 실행 | 1초 뒤 재실행 |
+| `명령 형식이 올바르지 않습니다` (코드 2) | 옵션 이름 오타, 필수 옵션 누락 | `<command> --help` |
+| `예기치 못한 오류가 발생했습니다: ...` (코드 3) | 위 어디에도 속하지 않는 내부 오류 | `backup` 으로 보존 → `--verbose` 로 다시 실행해 어느 단계에서 멈추는지 확인 → 저장 파일 점검 |
+
+### 실행 로그 (`--verbose`)
+
+`--verbose` 를 붙이면 서비스·저장소의 주요 메서드가 시작/완료/실패 로그와 소요 시간을 표준 오류에 출력합니다. 결과(표준 출력)와 섞이지 않습니다.
+
+```console
+$ python -m budget_app search --tag meal --verbose
+[log] 시작: BudgetService.search
+[log] 소요 시간: BudgetService.search 0.10ms
+[log] 완료: BudgetService.search
+ID        | 날짜       | 타입    | 카테고리 |  금액 | 메모 | 태그
+...
+```
+
+`시작/완료/실패` 는 `log_call`, `소요 시간` 은 `timed` 데코레이터가 남깁니다. 로그 수준은 `--verbose` 가 없으면 WARNING, 있으면 DEBUG 입니다(`cli._configure_logging`).
+
 ## 6.1 알아 둘 제한
 
 - 한 번에 한 프로세스만 쓰는 것을 전제로 합니다. 같은 데이터 폴더에 여러 프로세스가 동시에 쓰면 id가 겹칠 수 있습니다.
-- 같은 CSV를 두 번 `import` 하면 중복 검사 없이 두 번 등록됩니다.
+- 같은 CSV를 두 번 `import` 하면 중복 검사 없이 두 번 등록됩니다. 다음 단계로 `--skip-duplicates`(날짜·타입·카테고리·금액·메모가 같은 거래가 이미 있으면 건너뜀) 옵션을 계획하고 있습니다. 설계는 [docs/03-evaluation-answers.md Q16](docs/03-evaluation-answers.md) 참고.
+- `search` 에 `--limit` 이 없으면 일치한 결과를 모두 모아 정렬합니다. 결과가 1,000건을 넘으면 `--limit` 사용을 권하는 안내를 표준 오류에 출력합니다.
 - `recurring apply` 는 생성한 거래의 `recurring:<규칙 id>` 태그로 중복을 막습니다. 이 태그를 지우면 같은 달에 다시 생성됩니다.
 
 ## 7. 구조
@@ -220,6 +279,11 @@ samples/          import 용 예시 CSV
 
 의존 방향은 CLI → 서비스 → 저장소 → 모델 한쪽으로만 흐릅니다.
 
+```text
+cli.py → commands.py → services.py / recurring.py / csv_io.py / backup.py → repository.py / stores.py → storage.py
+          (prompts.py, formatter.py 는 commands.py 만 사용)          (models.py, validators.py 는 모든 계층이 사용)
+```
+
 ## 8. 테스트
 
 ```bash
@@ -227,3 +291,10 @@ python -m unittest discover -s tests -t .
 ```
 
 표준 라이브러리 제약에 맞춰 `unittest` 를 사용합니다. 테스트는 매번 임시 폴더를 쓰므로 `./data` 를 건드리지 않습니다.
+
+타입 힌트는 `mypy --strict` 로 검사합니다. 실행에는 필요 없으므로 개발용으로만 설치합니다.
+
+```bash
+pip install mypy              # 개발 환경에만
+mypy --strict budget_app      # Success: no issues found in 19 source files
+```

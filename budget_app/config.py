@@ -8,7 +8,8 @@ from pathlib import Path
 DEFAULT_DATA_DIR = "./data"
 DEFAULT_LIST_LIMIT = 10
 DEFAULT_TOP_N = 3
-BUDGET_WARNING_RATE = 80.0
+BUDGET_WARNING_RATE = 80.0  # 예산 사용률이 이 값(%) 이상이면 summary 에 [주의] 를 붙인다
+SEARCH_UNLIMITED_NOTICE_COUNT = 1000  # --limit 없는 search 결과가 이보다 많으면 안내를 띄운다
 DEFAULT_CATEGORIES: tuple[str, ...] = (
     "food",
     "transport",

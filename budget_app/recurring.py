@@ -27,6 +27,8 @@ class CategoryRemoval:
 
 
 class RecurringService:
+    """반복 규칙의 등록·삭제와 월별 적용을 맡는다. 거래 생성은 BudgetService 에 위임한다."""
+
     def __init__(self, store: RecurringStore, ledger: BudgetService) -> None:
         self._store = store
         self._ledger = ledger
@@ -58,7 +60,14 @@ class RecurringService:
         return target
 
     def remove_category(self, name: str, replace_with: str | None = None) -> CategoryRemoval:
-        """카테고리를 삭제한다. 거래뿐 아니라 반복 규칙이 쓰고 있어도 대체 카테고리가 필요하다."""
+        """카테고리를 삭제한다. 거래뿐 아니라 반복 규칙이 쓰고 있어도 대체 카테고리가 필요하다.
+
+        세 파일(규칙 → 거래 → 카테고리)을 한 트랜잭션으로 묶지는 않는다. 대신 참조하는 쪽을
+        먼저 옮기고 카테고리를 마지막에 지우므로, 어느 단계에서 중단되어도 지워진 카테고리를
+        가리키는 데이터는 남지 않고 같은 명령을 다시 실행하면 이어서 끝난다(이미 옮긴 건수는 0으로 보고된다).
+        """
+        # BudgetService.remove_category 도 같은 검사를 하지만, 규칙을 옮기기 전에 먼저 걸러야 한다.
+        self._ledger.check_category_removal(name, replace_with)
         rules = self._store.rules()
         using = [rule for rule in rules if rule.category == name]
         if using and replace_with is None:
@@ -67,7 +76,6 @@ class RecurringService:
                 hint=f"category remove --name {name} --replace-with <대체 카테고리> 로 "
                 "옮긴 뒤 삭제하거나, recurring remove 로 규칙을 먼저 지우세요.",
             )
-        moved_transactions = self._ledger.remove_category(name, replace_with)
         if using and replace_with is not None:
             self._store.replace_all(
                 [
@@ -75,6 +83,7 @@ class RecurringService:
                     for rule in rules
                 ]
             )
+        moved_transactions = self._ledger.remove_category(name, replace_with)
         return CategoryRemoval(transactions=moved_transactions, rules=len(using))
 
     def apply(self, month: str) -> ApplyResult:

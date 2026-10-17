@@ -1,15 +1,25 @@
 from __future__ import annotations
 
+import itertools
+import time
 import unicodedata
 import unittest
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Iterable
+from unittest import mock
 
+from budget_app import repository
 from budget_app.backup import create_backup
 from budget_app.csv_io import export_transactions, import_transactions
 from budget_app.errors import BudgetAppError, DataFileError, NotFoundError, ValidationError
 from budget_app.models import SearchCriteria
+from budget_app.repository import TransactionRepository
 
 from .helpers import DataDirTestCase, expense, income
+
+LARGE_CSV_ROWS = 10_000
+LARGE_CSV_TIME_LIMIT_SECONDS = 10.0
 
 
 class LedgerTests(DataDirTestCase):
@@ -289,6 +299,47 @@ class CsvTransferTests(DataDirTestCase):
         with self.assertRaises(DataFileError):
             import_transactions(self.ledger, self.csv_path)
 
+    def test_large_csv_import_registers_every_row_in_one_append(self) -> None:
+        rows = "".join(
+            f"2024-{1 + index % 12:02d}-{1 + index % 28:02d},expense,food,{100 + index},메모 {index},bulk\n"
+            for index in range(LARGE_CSV_ROWS)
+        )
+        self.csv_path.write_text("date,type,category,amount,memo,tags\n" + rows, encoding="utf-8")
+
+        started = time.perf_counter()
+        result = import_transactions(self.ledger, self.csv_path)
+        elapsed = time.perf_counter() - started
+
+        self.assertEqual((result.imported, result.skipped), (LARGE_CSV_ROWS, ()))
+        self.assertEqual(sum(1 for _ in self.ledger.iter_matching(SearchCriteria())), LARGE_CSV_ROWS)
+        self.assertLess(elapsed, LARGE_CSV_TIME_LIMIT_SECONDS, msg=f"import took {elapsed:.2f}s")
+
+    def test_interrupted_import_leaves_readable_file_and_never_reuses_ids(self) -> None:
+        self.csv_path.write_text(
+            "date,type,category,amount\n"
+            "2024-01-01,expense,food,1\n"
+            "2024-01-02,expense,food,2\n"
+            "2024-01-03,expense,food,3\n",
+            encoding="utf-8",
+        )
+        real_append = repository.append_jsonl
+
+        def append_two_then_fail(path: Path, records: Iterable[dict[str, Any]]) -> int:
+            real_append(path, itertools.islice(records, 2))
+            raise OSError(28, "No space left on device")
+
+        with mock.patch.object(repository, "append_jsonl", append_two_then_fail):
+            with self.assertRaises(OSError):
+                import_transactions(self.ledger, self.csv_path)
+        partial = [tx.id for tx in self.ledger.iter_matching(SearchCriteria())]
+        retried = import_transactions(self.ledger, self.csv_path)
+        all_ids = [tx.id for tx in self.ledger.iter_matching(SearchCriteria())]
+
+        self.assertEqual(partial, ["TX-000001", "TX-000002"])
+        self.assertEqual(retried.imported, 3)
+        self.assertEqual(all_ids[2:], ["TX-000004", "TX-000005", "TX-000006"])
+        self.assertEqual(len(all_ids), len(set(all_ids)))
+
 
 class RecurringAndBackupTests(DataDirTestCase):
     def setUp(self) -> None:
@@ -326,6 +377,33 @@ class RecurringAndBackupTests(DataDirTestCase):
         with self.assertRaises(NotFoundError):
             self.ctx.recurring.remove_rule(rule.id)
         self.assertEqual(self.ctx.recurring.add_rule(1, "expense", "rent", 1, "").id, "RC-0002")
+
+    def test_interrupted_category_replacement_leaves_no_dangling_reference(self) -> None:
+        self.ctx.ledger.add_category("gym")
+        self.ctx.ledger.add_transaction(expense("2024-01-10", 50000, "gym"))
+        self.ctx.recurring.add_rule(1, "expense", "gym", 50000, "헬스장")
+
+        with mock.patch.object(
+            TransactionRepository,
+            "rewrite",
+            autospec=True,
+            side_effect=OSError(5, "Input/output error"),
+        ):
+            with self.assertRaises(OSError):
+                self.ctx.recurring.remove_category("gym", replace_with="etc")
+        transaction_after_failure = self.ctx.ledger.list_recent(1)[0]
+        rule_after_failure = self.ctx.recurring.list_rules()[0]
+        categories_after_failure = self.ctx.ledger.list_categories()
+        retried = self.ctx.recurring.remove_category("gym", replace_with="etc")
+
+        # 규칙 → 거래 → 카테고리 순서로 처리하므로, 중간에 멈춰도 지워진 카테고리를 가리키는 데이터가 없다.
+        # 재실행은 남은 단계만 수행하므로 이미 옮겨진 규칙은 0건으로 보고된다.
+        self.assertEqual(rule_after_failure.category, "etc")
+        self.assertEqual(transaction_after_failure.category, "gym")
+        self.assertIn("gym", categories_after_failure)
+        self.assertEqual((retried.transactions, retried.rules), (1, 0))
+        self.assertEqual(self.ctx.ledger.list_recent(1)[0].category, "etc")
+        self.assertNotIn("gym", self.ctx.ledger.list_categories())
 
     def test_backup_copies_data_files_into_timestamped_folder(self) -> None:
         self.ctx.ledger.add_transaction(expense("2024-01-01", 1000))

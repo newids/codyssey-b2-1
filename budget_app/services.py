@@ -24,6 +24,11 @@ UPDATABLE_FIELDS = frozenset({"date", "type", "category", "amount", "memo", "tag
 
 
 class BudgetService:
+    """가계부의 업무 규칙(카테고리 확인, 최신순, 집계, 예산 비교, 삭제 정책)을 맡는다.
+
+    파일 형식과 화면 출력은 모르며, 저장소는 생성자로 받는다(의존성 주입).
+    """
+
     def __init__(
         self,
         transactions: TransactionRepository,
@@ -140,19 +145,25 @@ class BudgetService:
         self._categories.add(normalized)
         return normalized
 
+    def check_category_removal(self, name: str, replace_with: str | None) -> None:
+        """삭제할 카테고리가 등록되어 있고, 대체 카테고리(있다면)도 등록된 다른 이름인지 확인한다."""
+        self.require_category(name)
+        if replace_with is None:
+            return
+        if replace_with == name:
+            raise ValidationError(
+                "대체 카테고리가 삭제할 카테고리와 같습니다.",
+                hint="--replace-with 에 다른 카테고리를 지정하세요.",
+            )
+        self.require_category(replace_with)
+
     def remove_category(self, name: str, replace_with: str | None = None) -> int:
         """카테고리를 삭제한다. 사용 중이면 대체 카테고리가 있어야 한다.
 
-        대체 카테고리로 옮긴 거래 수를 반환한다.
+        거래를 먼저 옮기고 카테고리는 마지막에 지우므로, 도중에 멈춰도
+        지워진 카테고리를 가리키는 거래는 생기지 않는다. 옮긴 거래 수를 반환한다.
         """
-        self.require_category(name)
-        if replace_with is not None:
-            if replace_with == name:
-                raise ValidationError(
-                    "대체 카테고리가 삭제할 카테고리와 같습니다.",
-                    hint="--replace-with 에 다른 카테고리를 지정하세요.",
-                )
-            self.require_category(replace_with)
+        self.check_category_removal(name, replace_with)
         in_use = sum(1 for tx in self._transactions.iter_all() if tx.category == name)
         if in_use and replace_with is None:
             raise ValidationError(

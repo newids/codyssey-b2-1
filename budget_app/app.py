@@ -14,6 +14,8 @@ from .stores import BudgetStore, CategoryStore, RecurringStore, SequenceStore
 
 @dataclass(frozen=True)
 class AppContext:
+    """한 번의 명령 실행에 필요한 객체 묶음. 명령 처리기는 이 안의 서비스만 호출한다."""
+
     paths: DataPaths
     ledger: BudgetService
     recurring: RecurringService

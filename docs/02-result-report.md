@@ -10,9 +10,10 @@
 | 필수 기능 10종 | 모두 구현 |
 | 보너스 4종 (백업, 반복 내역, 표 정렬, 저장 원자성) | 모두 구현 |
 | 외부 라이브러리 | 사용하지 않음 (표준 라이브러리만) |
-| 자동 테스트 | 97개 통과 (Python 3.13.5, 3.10.12 양쪽) |
+| 자동 테스트 | 101개 통과 (Python 3.13.5, 3.10.12 양쪽) |
 | 줄 실행률 | 전체 약 99% (표준 라이브러리 `trace` 로 측정, 모듈별 최저 80%) |
-| 코드 규모 | 앱 19개 파일 약 1,950줄, 테스트 약 1,060줄 |
+| 코드 규모 | 앱 19개 파일 약 2,040줄, 테스트 약 1,220줄 |
+| 타입 검사 | `mypy --strict budget_app` 오류 0건 (mypy 2.4.0) |
 | 고정한 선택 | JSONL / `update` 옵션 방식 / 기본 카테고리 자동 생성 |
 
 ## 2. 요구사항 충족표
@@ -232,6 +233,36 @@ $ head -3 data/transactions.jsonl
 {"id": "TX-000003", "type": "expense", "date": "2024-01-08", "amount": 12000, "category": "food", "memo": "점심", "tags": ["meal"]}
 ```
 
+### 3.10 경계·실패 사례
+
+핵심 명령마다 "잘못된 경우에 어떻게 끝나는가"를 한 줄씩 정리했습니다. 모두 자동 테스트로 확인한 동작입니다.
+
+| 명령 | 입력 | 결과 | 종료 코드 | 테스트 |
+| --- | --- | --- | --- | --- |
+| `add` | 날짜 `2024-13-40`, 금액 `-500` | 이유를 알려 주고 그 항목만 다시 물음 | 0 | `test_add_reprompts_until_each_field_is_valid` |
+| `add` | 입력 도중 Ctrl+D (EOF) | 아무것도 저장하지 않고 취소 안내 | 1 | `test_add_cancelled_by_end_of_input_saves_nothing` |
+| `add` | 금액 5,000자리 숫자, 비 ASCII 숫자 | 입력 오류로 거부(최대 15자리) | 1 | `test_hostile_values_are_rejected_as_validation_errors` |
+| `list` | `--limit 0`, `--limit abc` | `[오류] --limit 값은 1 이상의 정수여야 합니다.` | 1 | `test_list_on_empty_data_and_invalid_limit` |
+| `list` | 거래 0건 | `거래 내역이 없습니다. add 명령으로 ...` | 0 | `test_empty_states_are_explained` |
+| `search` | `--from` 이 `--to` 보다 늦음, `--min-amount` > `--max-amount` | 순서가 바뀌었다고 안내 | 1 | `test_search_by_options`, `test_search_by_amount_range` |
+| `search` | `--limit` 없이 1,000건 초과 일치 | 결과 전체 출력 + `--limit` 권장 안내(표준 오류) | 0 | `test_search_without_limit_suggests_limit_when_result_is_large` |
+| `summary` | 거래가 없는 달 | `[2024-03] 데이터 없음` | 0 | `test_summary_without_data_says_so` |
+| `summary` | 예산 80% 이상 / 초과 | `[주의]` / `[경고] 예산을 N원 초과했습니다!` | 0 | `test_budget_near_limit_shows_caution_and_income_only_month_has_no_ranking` |
+| `update` | 바꿀 옵션 없음, 없는 id, `--amount -1` | 파일을 건드리지 않고 오류 | 1 | `test_update_failures_leave_data_untouched` |
+| `delete` | 없는 id | `[오류] 없는 데이터입니다: id=...` + id 확인 힌트 | 1 | `test_delete_removes_one_and_unknown_id_is_not_found` |
+| `category remove` | 사용 중인 카테고리, 대체 없음 | 사용 건수를 알려 주며 차단 | 1 | `test_category_in_use_cannot_be_removed_without_replacement` |
+| `category remove --replace-with` | 거래 옮기는 단계에서 I/O 실패 | 규칙만 옮겨진 상태로 멈추고 카테고리는 남음. 재실행하면 완료 | 1 | `test_interrupted_category_replacement_leaves_no_dangling_reference` |
+| `export` | 기간 조건 없음, `--month` 와 `--from` 동시 지정 | 어떤 조합이 필요한지 힌트 | 1 | `test_export_and_import_report_counts` |
+| `import` | 없는 파일, 필수 컬럼 없는 헤더, cp949 파일 | 아무것도 등록하지 않고 원인 안내 | 1 | `test_import_rejects_bad_files` |
+| `import` | 12행 전부 잘못됨 | `imported=0, skipped=12`, 사유 10건 + `외 2건` | 0 | `test_category_add_by_option_and_import_skip_reasons` |
+| `import --strict` | 한 행이라도 잘못됨 | 아무것도 등록하지 않음 | 1 | `test_strict_import_exits_with_error_and_writes_nothing` |
+| `import` | 1만 행 CSV | 전부 등록, 약 1초 | 0 | `test_large_csv_import_registers_every_row_in_one_append` |
+| `import` | 3행 중 2행 쓴 뒤 디스크 가득 참 | 쓴 2행은 읽을 수 있고, 재실행 시 새 id(겹치지 않음) | 1 | `test_interrupted_import_leaves_readable_file_and_never_reuses_ids` |
+| `recurring apply` | 규칙의 카테고리가 지워진 뒤 | 그 규칙만 `실패` 로 보고 | 1 | `test_export_by_date_range_and_recurring_failure_report` |
+| `backup` | 같은 초에 두 번 실행 | `같은 시각의 백업이 이미 있습니다` | 1 | `test_backup_copies_data_files_into_timestamped_folder` |
+| 모든 명령 | 깨진 `transactions.jsonl` | 몇 번째 줄인지 알려 주고 종료(스택트레이스 없음) | 1 | `test_corrupted_data_file_is_reported_without_traceback` |
+| 모든 명령 | 옵션 오타 | `명령 형식이 올바르지 않습니다` + `--help` 안내 | 2 | `test_usage_errors_exit_with_2_and_hint` |
+
 ## 4. 보너스 과제
 
 ```console
@@ -267,7 +298,7 @@ $ python -m budget_app backup
 $ python -m unittest discover -s tests -t .
 .................................................................................................
 ----------------------------------------------------------------------
-Ran 97 tests in 0.723s
+Ran 101 tests in 1.823s
 
 OK
 ```
@@ -276,8 +307,8 @@ OK
 | --- | --- | --- |
 | `tests/test_validators_models.py` | 검증 함수, 모델 | 18 |
 | `tests/test_storage.py` | JSONL 입출력, 원자적 쓰기, 저장소 | 18 |
-| `tests/test_services.py` | 서비스, CSV, 반복 내역, 백업 | 29 |
-| `tests/test_cli.py` | 명령 실행(E2E), 데코레이터, 표 정렬 | 32 |
+| `tests/test_services.py` | 서비스, CSV(1만 행·중단 포함), 반복 내역, 백업 | 32 |
+| `tests/test_cli.py` | 명령 실행(E2E), 데코레이터, 표 정렬 | 33 |
 
 - Python 3.13.5와 3.10.12에서 모두 통과했습니다.
 - 줄 실행률은 `python -m trace --count --missing` 으로 측정했습니다. 측정된 18개 모듈 중 15개가 100%이고,
@@ -321,6 +352,17 @@ OK
 | `search --min-amount/--max-amount` | 금액 범위 검색 (PR #1) |
 | 평가 답변 보강 | 10만 건 병목/개선(Q15), 깨진 CSV 행 처리(Q16), 평가항목별 답변서([04-evaluation-checklist.md](04-evaluation-checklist.md)) |
 
+## 7.2 AI 사전평가 보완 제안 반영 (2026-10-17)
+
+16개 항목이 모두 통과한 사전평가에서 항목마다 나온 "보완" 제안을 반영했습니다. 항목별 조치는 [04-evaluation-checklist.md](04-evaluation-checklist.md) 끝의 표에 있습니다. 코드가 바뀐 것은 아래 네 가지입니다.
+
+| 보완 | 내용 |
+| --- | --- |
+| 카테고리 대체 순서 수정 | 기존에는 거래를 옮기고 카테고리를 지운 **뒤에** 반복 규칙을 옮겼기 때문에, 규칙을 쓰는 단계에서 실패하면 지워진 카테고리를 가리키는 규칙이 남았습니다. 규칙 → 거래 → 카테고리 순서로 바꾸고 중단 테스트를 추가했습니다 |
+| `search` 안내 | `--limit` 없이 결과가 1,000건을 넘으면 `--limit` 사용을 권하는 안내를 표준 오류에 출력. 도움말에도 권장 문구 추가 |
+| 대용량·중단 테스트 | 1만 행 CSV import(약 1초), 덧붙이는 도중 디스크 오류 시 파일 상태와 id 재사용 금지 검증 |
+| 타입 검사 | `mypy --strict` 가 지적한 6곳(핸들러·파서 타입, 제네릭 인자)을 고쳐 오류 0건 |
+
 ## 8. 알려진 한계
 
 고치지 않고 남겨 둔 항목입니다.
@@ -329,6 +371,7 @@ OK
   한 사람이 한 터미널에서 쓰는 프로그램이라는 전제로 파일 잠금은 넣지 않았습니다.
 - **반복 내역의 중복 방지는 태그에 의존합니다.** 생성된 거래의 `recurring:RC-0001` 태그를 `update --tags` 로 지우거나 날짜를 다른 달로 옮기면 같은 달에 다시 생성됩니다.
 - **수정·삭제·조회 시간은 파일 크기에 비례합니다.** 인덱스가 없어 30만 건에서 수 초가 걸립니다.
-- **`search` 에 `--limit` 이 없으면** 조건에 맞는 결과를 모두 모아 정렬합니다.
+- **`search` 에 `--limit` 이 없으면** 조건에 맞는 결과를 모두 모아 정렬합니다. 1,000건을 넘으면 `--limit` 을 권하는 안내만 띄우고 막지는 않습니다.
 - **`-` 로 시작하는 값**은 `--memo=-abc` 처럼 `=` 로 붙여 써야 합니다(`argparse` 의 동작).
-- **같은 CSV를 두 번 `import` 하면** 중복 검사 없이 두 번 등록됩니다.
+- **같은 CSV를 두 번 `import` 하면** 중복 검사 없이 두 번 등록됩니다. `--skip-duplicates` 옵션을 다음 단계로 계획했습니다([03-evaluation-answers.md Q16](03-evaluation-answers.md)).
+- **`import` 가 덧붙이는 도중 중단되면** 그때까지 쓰인 행만 남고 자동으로 되돌리지 않습니다. 파일은 읽을 수 있고 id 는 겹치지 않습니다.

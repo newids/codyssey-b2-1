@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable, Iterator, Sequence
+from typing import Any, Callable, Iterator, Sequence
 
 from .decorators import log_call, timed
 from .models import Transaction, TransactionInput, format_transaction_id, id_number
@@ -16,6 +16,11 @@ Transform = Callable[[Transaction], "Transaction | None"]
 
 
 class TransactionRepository:
+    """거래 파일 하나를 스트리밍으로 읽고(iter_all), 덧붙이고(add_many), 원자적으로 다시 쓴다(rewrite).
+
+    id 번호는 직접 세지 않고 SequenceStore 에서 예약받는다. 업무 규칙(카테고리 존재 등)은 모른다.
+    """
+
     def __init__(self, path: Path, sequence: SequenceStore) -> None:
         self._path = path
         self._sequence = sequence
@@ -48,7 +53,7 @@ class TransactionRepository:
         """
         changed = 0
 
-        def transformed() -> Iterator[dict]:
+        def transformed() -> Iterator[dict[str, Any]]:
             nonlocal changed
             for tx in self.iter_all():
                 result = transform(tx)

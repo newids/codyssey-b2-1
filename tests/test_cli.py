@@ -8,10 +8,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from budget_app.config import SEARCH_UNLIMITED_NOTICE_COUNT
 from budget_app.decorators import handle_errors, log_call, timed
 from budget_app.formatter import display_width, format_table, pad
 
-from .helpers import DataDirTestCase
+from .helpers import DataDirTestCase, expense
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 LUNCH = ("2024-01-15", "expense", "food", "15000", "점심", "meal")
@@ -322,6 +323,20 @@ class CliFlowTests(DataDirTestCase):
 
         self.assertEqual(result.code, 0)
         self.assertTrue((other / "categories.jsonl").exists())
+
+    def test_search_without_limit_suggests_limit_when_result_is_large(self) -> None:
+        ctx = self.app()
+        ctx.ledger.add_transactions(
+            [expense("2024-01-01", 1) for _ in range(SEARCH_UNLIMITED_NOTICE_COUNT + 1)]
+        )
+
+        unlimited = self.run_cli("search", "--category", "food")
+        limited = self.run_cli("search", "--category", "food", "--limit", "5")
+
+        self.assertIn(f"(총 {SEARCH_UNLIMITED_NOTICE_COUNT + 1}건)", unlimited.out)
+        self.assertIn(f"[안내] 결과가 {SEARCH_UNLIMITED_NOTICE_COUNT + 1}건", unlimited.err)
+        self.assertIn("--limit", unlimited.err)
+        self.assertEqual(limited.err, "")
 
     def test_verbose_prints_log_and_elapsed_time(self) -> None:
         result = self.run_cli("list", "--verbose")

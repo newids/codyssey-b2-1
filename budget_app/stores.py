@@ -35,6 +35,8 @@ def _decode_sequence(raw: dict[str, Any]) -> tuple[str, int]:
 
 
 class CategoryStore:
+    """카테고리 이름 목록 파일 하나를 담당한다. 이름의 유효성은 서비스가 확인한다."""
+
     def __init__(self, path: Path) -> None:
         self._path = path
 
@@ -56,6 +58,8 @@ class CategoryStore:
 
 
 class BudgetStore:
+    """월 예산 파일 하나를 담당한다. 같은 달은 덮어쓰고 월 순서로 정렬해 저장한다."""
+
     def __init__(self, path: Path) -> None:
         self._path = path
 
@@ -72,6 +76,8 @@ class BudgetStore:
 
 
 class RecurringStore:
+    """반복 규칙 파일 하나를 담당하고, 규칙 id 는 SequenceStore 에서 발급받는다."""
+
     def __init__(self, path: Path, sequence: SequenceStore) -> None:
         self._path = path
         self._sequence = sequence
