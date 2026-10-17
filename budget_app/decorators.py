@@ -30,7 +30,24 @@ def format_error(message: str, hint: str = "") -> str:
 
 
 def handle_errors(func: Callable[P, int]) -> Callable[P, int]:
-    """예외를 스택트레이스 대신 '원인 + 힌트'로 출력하고 종료 코드로 바꾼다."""
+    """예외를 스택트레이스 대신 '원인 + 힌트'로 출력하고 종료 코드로 바꾼다.
+
+    예외 → 종료 코드 매핑(위에서부터 먼저 맞는 것):
+
+        BudgetAppError 계열 (ValidationError, NotFoundError, DataFileError, ...) → 1, message/hint 그대로
+        KeyboardInterrupt (Ctrl+C)                                             → 130
+        BrokenPipeError (`| head` 처럼 받는 쪽이 먼저 닫힘)                     → 1, 메시지 없음
+        OSError (권한, 경로, 디스크 공간)                                       → 1, strerror + 파일명
+        그 밖의 Exception                                                      → 3, 예외 이름만 노출
+        (argparse 형식 오류는 KoreanArgumentParser.error 가 2 로 끝낸다)
+
+    사용 예::
+
+        @handle_errors
+        def main(argv=None) -> int:
+            ...            # BudgetAppError 를 던지면 "[오류] ... / [힌트] ..." 두 줄과 코드 1
+            return EXIT_OK
+    """
 
     @functools.wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> int:
@@ -60,7 +77,8 @@ def handle_errors(func: Callable[P, int]) -> Callable[P, int]:
             print(
                 format_error(
                     f"예기치 못한 오류가 발생했습니다: {type(error).__name__}: {error}",
-                    "같은 문제가 반복되면 backup 명령으로 데이터를 보존한 뒤 입력값을 확인하세요.",
+                    "backup 명령으로 데이터를 보존한 뒤, 실행한 명령 전체와 --verbose 를 붙여 다시 실행한 "
+                    "출력(표준 오류)을 함께 확인하세요. 마지막 [log] 줄이 멈춘 단계입니다.",
                 ),
                 file=sys.stderr,
             )

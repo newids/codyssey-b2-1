@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from budget_app import config
 from budget_app.config import SEARCH_UNLIMITED_NOTICE_COUNT
 from budget_app.decorators import handle_errors, log_call, timed
 from budget_app.formatter import display_width, format_table, pad
@@ -107,6 +108,18 @@ class CliFlowTests(DataDirTestCase):
         self.assertIn("2024-01 예산 100000원", self.run_cli("budget", "show", "--month", "2024-01").out)
         self.assertIn("- 2024-01: 100000원", self.run_cli("budget", "list").out)
         self.assertEqual(self.run_cli("budget", "show", "--month", "2030-01").code, 1)
+
+    def test_budget_remove_command(self) -> None:
+        self.run_cli("budget", "set", "--month", "2024-01", "--amount", "100000")
+
+        removed = self.run_cli("budget", "remove", "--month", "2024-01")
+        again = self.run_cli("budget", "remove", "--month", "2024-01")
+        summary = self.run_cli("summary", "--month", "2024-01")
+
+        self.assertIn("[삭제 완료] 2024-01 예산 100000원", removed.out)
+        self.assertEqual(again.code, 1)
+        self.assertIn("설정된 예산이 없습니다", self.run_cli("budget", "list").out)
+        self.assertNotIn("예산", summary.out)
 
     def test_summary_without_data_says_so(self) -> None:
         result = self.run_cli("summary", "--month", "2020-01")
@@ -288,7 +301,7 @@ class CliFlowTests(DataDirTestCase):
     def test_every_command_supports_help(self) -> None:
         commands = (
             [], ["add"], ["list"], ["search"], ["summary"], ["update"], ["delete"], ["import"],
-            ["export"], ["backup"], ["budget"], ["budget", "set"], ["category"],
+            ["export"], ["backup"], ["budget"], ["budget", "set"], ["budget", "remove"], ["category"],
             ["category", "remove"], ["recurring"], ["recurring", "apply"],
         )
         for command in commands:
@@ -337,6 +350,71 @@ class CliFlowTests(DataDirTestCase):
         self.assertIn(f"[안내] 결과가 {SEARCH_UNLIMITED_NOTICE_COUNT + 1}건", unlimited.err)
         self.assertIn("--limit", unlimited.err)
         self.assertEqual(limited.err, "")
+
+    def test_search_default_cap_from_config_applies_when_limit_is_omitted(self) -> None:
+        ctx = self.app()
+        ctx.ledger.add_transactions([expense("2024-01-01", 1) for _ in range(5)])
+
+        with mock.patch.object(config, "SEARCH_DEFAULT_LIMIT", 2):
+            capped = self.run_cli("search", "--category", "food")
+            explicit = self.run_cli("search", "--category", "food", "--limit", "4")
+
+        self.assertIn("(총 2건)", capped.out)
+        self.assertIn("기본 상한 2건", capped.err)
+        self.assertIn("(총 4건)", explicit.out)
+        self.assertEqual(explicit.err, "")
+
+    def test_import_skip_duplicates_option_reports_duplicates(self) -> None:
+        source = self.work_dir / "dup.csv"
+        source.write_text(
+            "date,type,category,amount\n2024-01-15,expense,food,1\n2024-01-15,expense,food,1\n",
+            encoding="utf-8",
+        )
+
+        first = self.run_cli("import", "--from", str(source), "--skip-duplicates")
+        second = self.run_cli("import", "--from", str(source), "--skip-duplicates")
+
+        self.assertIn("imported=2, skipped=0", first.out)  # 파일 안의 반복은 실제 거래로 본다
+        self.assertIn("imported=0, skipped=2", second.out)
+        self.assertIn("이미 있는 거래", second.out)
+
+    def test_exit_codes_per_failure_case(self) -> None:
+        """핵심 명령의 실패 사례마다 기대 종료 코드를 한 표로 고정한다."""
+        self.add(*LUNCH)
+        cases: list[tuple[tuple[str, ...], tuple[str, ...], int]] = [
+            (("list",), (), 0),
+            (("list", "--limit", "0"), (), 1),
+            (("list", "--limit", "x"), (), 1),
+            (("search", "--from", "2024-02-01", "--to", "2024-01-01"), (), 1),
+            (("search", "--category", "nope"), (), 1),
+            (("summary", "--month", "2024-1"), (), 1),
+            (("summary",), (), 2),
+            (("budget", "set", "--month", "2024-01", "--amount", "0"), (), 1),
+            (("budget", "show", "--month", "2030-01"), (), 1),
+            (("budget", "remove", "--month", "2030-01"), (), 1),
+            (("category", "add", "--name", "food"), (), 1),
+            (("category", "remove", "--name", "food"), (), 1),
+            (("category", "remove", "--name", "food", "--replace-with", "food"), (), 1),
+            (("update", "--id", "TX-000001"), (), 1),
+            (("update", "--id", "TX-000001", "--category", "nope"), (), 1),
+            (("update", "--id", "TX-999999", "--amount", "1"), (), 1),
+            (("delete", "--id", "TX-999999"), (), 1),
+            (("delete",), (), 2),
+            (("import", "--from", str(self.work_dir / "missing.csv")), (), 1),
+            (("import", "--from", str(self.work_dir)), (), 1),
+            (("export", "--out", str(self.work_dir / "x.csv")), (), 1),
+            (("export", "--out", str(self.work_dir / "no" / "dir" / "x.csv"), "--month", "2024-01"), (), 0),
+            (("export", "--out", str(self.work_dir), "--month", "2024-01"), (), 1),
+            (("recurring", "add", "--day", "32", "--type", "expense", "--category", "food", "--amount", "1"), (), 1),
+            (("recurring", "remove", "--id", "RC-9999"), (), 1),
+            (("recurring", "apply", "--month", "2024-01"), (), 0),
+            (("add",), ("2024-01-15", "expense", "food", "100", "", ""), 0),
+            (("add",), ("2024-01-15",), 1),
+            (("nope",), (), 2),
+        ]
+        for argv, inputs, expected in cases:
+            with self.subTest(argv=argv):
+                self.assertEqual(self.run_cli(*argv, inputs=inputs).code, expected)
 
     def test_verbose_prints_log_and_elapsed_time(self) -> None:
         result = self.run_cli("list", "--verbose")

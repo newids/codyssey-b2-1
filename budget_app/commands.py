@@ -8,9 +8,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from . import config
 from .app import AppContext
 from .backup import create_backup
-from .config import SEARCH_UNLIMITED_NOTICE_COUNT
 from .csv_io import export_transactions, import_transactions
 from .errors import EXIT_ERROR, EXIT_OK, NotFoundError, ValidationError
 from .formatter import format_recurring_rules, format_summary, format_transactions
@@ -66,21 +66,35 @@ def cmd_search(args: argparse.Namespace, ctx: AppContext) -> int:
         min_amount=_optional(args.min_amount, parse_amount),
         max_amount=_optional(args.max_amount, parse_amount),
     )
-    limit = _optional(args.limit, lambda text: parse_positive_int(text, "--limit"))
+    requested = _optional(args.limit, lambda text: parse_positive_int(text, "--limit"))
+    limit = config.SEARCH_DEFAULT_LIMIT if requested is None else requested
     transactions = ctx.ledger.search(criteria, limit)
     if not transactions:
         print("조건에 맞는 거래가 없습니다.")
         return EXIT_OK
-    if limit is None and len(transactions) > SEARCH_UNLIMITED_NOTICE_COUNT:
-        # 표보다 먼저 출력해 긴 결과에 밀려 안 보이는 일이 없게 한다(표준 오류라 결과와 섞이지 않는다).
-        print(
-            f"[안내] 결과가 {len(transactions)}건입니다. 다음부터 --limit N 을 주면 "
-            "최신 N건만 골라 메모리와 출력량을 줄일 수 있습니다.",
-            file=sys.stderr,
-        )
+    # 안내는 표보다 먼저, 표준 오류로 출력해 긴 결과에 밀리거나 결과와 섞이지 않게 한다.
+    for notice in _search_notices(requested, limit, len(transactions)):
+        print(f"[안내] {notice}", file=sys.stderr)
     print("\n".join(format_transactions(transactions)))
     print(f"(총 {len(transactions)}건)")
     return EXIT_OK
+
+
+def _search_notices(requested: int | None, limit: int | None, count: int) -> list[str]:
+    """--limit 을 안 줬을 때만: 기본 상한에 걸렸거나 결과가 너무 많으면 알린다."""
+    if requested is not None:
+        return []
+    if limit is not None and count >= limit:
+        return [
+            f"기본 상한 {limit}건만 표시합니다(config.SEARCH_DEFAULT_LIMIT). "
+            "더 보려면 --limit N 을 지정하세요."
+        ]
+    if count > config.SEARCH_UNLIMITED_NOTICE_COUNT:
+        return [
+            f"결과가 {count}건입니다. 다음부터 --limit N 을 주면 최신 N건만 골라 "
+            "메모리와 출력량을 줄일 수 있습니다."
+        ]
+    return []
 
 
 def cmd_summary(args: argparse.Namespace, ctx: AppContext) -> int:
@@ -105,6 +119,12 @@ def cmd_budget_show(args: argparse.Namespace, ctx: AppContext) -> int:
             hint=f"budget set --month {month} --amount <금액> 으로 설정하세요.",
         )
     print(f"{budget.month} 예산 {budget.amount}원")
+    return EXIT_OK
+
+
+def cmd_budget_remove(args: argparse.Namespace, ctx: AppContext) -> int:
+    budget = ctx.ledger.remove_budget(parse_month(args.month))
+    print(f"[삭제 완료] {budget.month} 예산 {budget.amount}원")
     return EXIT_OK
 
 
@@ -161,7 +181,9 @@ def cmd_delete(args: argparse.Namespace, ctx: AppContext) -> int:
 
 
 def cmd_import(args: argparse.Namespace, ctx: AppContext) -> int:
-    result = import_transactions(ctx.ledger, Path(args.source), strict=args.strict)
+    result = import_transactions(
+        ctx.ledger, Path(args.source), strict=args.strict, skip_duplicates=args.skip_duplicates
+    )
     print(f"[완료] imported={result.imported}, skipped={len(result.skipped)}")
     for reason in result.skipped[:MAX_SKIP_REASONS_SHOWN]:
         print(f"  - 건너뜀 {reason}")

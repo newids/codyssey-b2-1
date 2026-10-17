@@ -41,11 +41,11 @@ python -m budget_app summary --help    # 명령별 사용법
 | `list [--limit N]` | 옵션 | 최신순 목록 (기본 10건) |
 | `search [--from] [--to] [--category] [--type] [--q] [--tag] [--min-amount] [--max-amount] [--limit]` | 옵션 | 조건 검색, 최신순. 금액 범위는 양 끝 포함 |
 | `summary --month YYYY-MM [--top N]` | 옵션 | 총수입/총지출/잔액, 예산 사용률, 지출 TOP N (기본 3) |
-| `budget set --month YYYY-MM --amount 금액` | 옵션 | 월 예산 저장 (`budget show --month`, `budget list` 로 조회) |
+| `budget set --month YYYY-MM --amount 금액` | 옵션 | 월 예산 저장 (`budget show --month`, `budget list` 로 조회, `budget remove --month` 로 삭제) |
 | `category add [--name]` / `list` / `remove [--name] [--replace-with]` | 대화형 또는 옵션 | 카테고리 관리 |
 | `update --id ID [--date] [--type] [--category] [--amount] [--memo] [--tags]` | **옵션 방식으로 고정** | 지정한 항목만 수정 |
 | `delete --id ID` | 옵션 | 거래 삭제 |
-| `import --from CSV [--strict]` | 옵션 | CSV 일괄 등록 (`--strict`: 잘못된 행이 있으면 전부 취소) |
+| `import --from CSV [--strict] [--skip-duplicates]` | 옵션 | CSV 일괄 등록 (`--strict`: 잘못된 행이 있으면 전부 취소, `--skip-duplicates`: 이미 있는 거래는 건너뜀) |
 | `export --out CSV (--month YYYY-MM \| --from/--to)` | 옵션 | 조건에 맞는 거래를 CSV로 저장 |
 | `backup` | - | 데이터 파일을 타임스탬프 폴더로 백업 (보너스) |
 | `recurring add/list/remove/apply` | 옵션 | 반복 내역 등록과 월별 자동 생성 (보너스) |
@@ -86,6 +86,8 @@ $ python -m budget_app search --type expense --min-amount 50000      # 5만원 �
 
 $ python -m budget_app budget set --month 2024-01 --amount 500000
 [저장 완료] 2024-01 예산 500000원
+$ python -m budget_app budget remove --month 2023-12
+[삭제 완료] 2023-12 예산 400000원
 
 $ python -m budget_app summary --month 2024-01 --top 3
 [2024-01 요약] 거래 12건
@@ -113,6 +115,9 @@ $ python -m budget_app export --out q1.csv --from 2024-01-01 --to 2024-03-31
 $ python -m budget_app import --from samples/import_sample.csv
 [완료] imported=7, skipped=0
 $ python -m budget_app import --from bank.csv --strict   # 잘못된 행이 있으면 전부 취소
+$ python -m budget_app import --from bank.csv --skip-duplicates   # 같은 파일을 다시 넣어도 중복 등록 안 됨
+[완료] imported=0, skipped=7
+  - 건너뜀 2행: 이미 있는 거래 (2024-01-02 salary 3000000원)
 
 $ python -m budget_app backup
 $ python -m budget_app recurring add --day 25 --type income --category salary --amount 3000000 --memo 월급
@@ -123,6 +128,14 @@ $ python -m budget_app recurring apply --month 2024-02
 거래가 없는 달은 `[YYYY-MM] 데이터 없음` 을 출력합니다.
 
 `[주의]` 기준(80%)은 `budget_app/config.py` 의 `BUDGET_WARNING_RATE` 상수로 바꿉니다. 한 사람이 쓰는 프로그램이라 별도 설정 파일이나 옵션으로는 두지 않았습니다.
+
+예산을 바꾸거나 지우면 요약과 경고에 바로 반영됩니다.
+
+| 동작 | 영향 |
+| --- | --- |
+| `budget set` (같은 달 다시 설정) | 덮어씁니다. 이력은 남지 않고, `summary` 는 실행 시점의 예산으로 사용률·경고를 계산합니다. 거래는 바뀌지 않습니다 |
+| `budget remove --month` | 그 달의 예산 줄과 `[주의]`/`[경고]` 가 `summary` 에서 사라집니다. 거래와 다른 달 예산은 그대로입니다 |
+| 예산이 없는 달의 `summary` | 수입·지출·잔액·TOP N 만 출력하고 예산 줄은 생략합니다 |
 
 ## 4. 저장 파일 위치와 형식
 
@@ -157,6 +170,17 @@ $ python -m budget_app list --limit 3                 # 되돌아왔는지 확�
 - 5개 파일을 **함께** 되돌리세요. `transactions.jsonl` 만 되돌리면 `meta.jsonl` 의 일련번호와 어긋나지는 않지만(번호는 건너뛸 뿐), 예산·카테고리는 복구 전 상태로 남습니다.
 - 복구는 프로그램이 실행 중이 아닐 때 합니다. 저장 파일이 깨져 `저장 파일을 읽을 수 없습니다: ... N번째 줄` 오류가 날 때도 같은 방법으로 되돌립니다.
 
+복구 뒤에는 아래 순서로 무결성을 확인합니다.
+
+```console
+$ grep -c . data/backups/20261017-152144/transactions.jsonl; grep -c . data/transactions.jsonl   # 1) 건수가 같은가
+$ python -m budget_app list --limit 3 && python -m budget_app category list && python -m budget_app budget list   # 2) 세 파일이 읽히는가 (깨진 줄이 있으면 여기서 줄 번호와 함께 멈춤)
+$ grep -o '"TX-[0-9]*"' data/transactions.jsonl | sort | tail -1; cat data/meta.jsonl          # 3) meta 의 transaction 값이 가장 큰 id 번호 이상인가
+$ python -m budget_app summary --month 2024-01                                                  # 4) 합계가 기억하는 값과 맞는가
+```
+
+3)에서 `meta.jsonl` 의 값이 가장 큰 id 번호보다 작으면(예: 거래 파일만 최신으로 되돌린 경우) 다음 `add` 가 같은 id 를 발급할 수 있습니다. 이때는 `meta.jsonl` 을 지우세요. 파일이 없으면 거래 파일의 가장 큰 번호에서 이어 갑니다.
+
 ## 5. import/export CSV 스키마
 
 UTF-8, 첫 줄은 헤더입니다. 엑셀이 붙이는 BOM이 있어도 읽습니다.
@@ -176,8 +200,11 @@ date,type,category,amount,memo,tags
 2024-01-20,expense,food,18000,"저녁, 친구와","meal,friends"
 ```
 
+- 엑셀 주의: 한국어 Windows 엑셀의 기본 "CSV(쉼표로 분리)" 는 cp949 로 저장되어 `CSV 파일을 읽을 수 없습니다` 오류가 납니다. **"CSV UTF-8(쉼표로 분리)"** 형식을 고르세요. 구분자는 쉼표만 지원하며(세미콜론을 쓰는 지역 설정은 지원하지 않음), 날짜는 엑셀 서식이 아닌 `YYYY-MM-DD` 문자열이어야 합니다.
+- `export` 결과는 BOM 없는 UTF-8 입니다. 엑셀에서 한글이 깨져 보이면 "데이터 > 텍스트/CSV 가져오기" 에서 원본 파일 인코딩을 `65001: UTF-8` 로 고르세요. 다른 도구(파이썬, git diff, 구글 시트)와의 호환을 위해 BOM 은 붙이지 않았습니다.
 - `import` 는 기본적으로 **부분 성공** 방식입니다. 올바른 행만 등록하고, 잘못된 행은 행 번호와 사유를 출력하며 건너뜁니다(`skipped`).
 - `import --strict` 는 **롤백** 방식입니다. 잘못된 행이 하나라도 있으면 아무것도 등록하지 않고 사유를 알려 줍니다. 어느 방식이든 모든 행을 검증한 뒤에 파일에 쓰므로 절반만 들어가는 일은 없습니다.
+- `import --skip-duplicates` 는 날짜·타입·카테고리·금액·메모가 모두 같은 거래가 **이미 저장된 개수만큼** `이미 있는 거래` 로 건너뜁니다. 저장된 1건이 CSV 의 같은 행 1개를 상쇄하므로, 같은 파일을 다시 넣으면 전부 건너뛰고, 같은 날 같은 금액을 실제로 두 번 쓴 행(파일 안의 반복)은 등록됩니다. 태그와 메모의 앞뒤 공백은 비교하지 않습니다. 기본값이 아닌 이유는 명세를 합치는 과정에서 어떤 행이 왜 빠졌는지 사용자가 알고 선택해야 하기 때문입니다.
 - 필수 컬럼이 헤더에 없으면 아무것도 등록하지 않고 오류로 끝납니다.
 - `export` 는 `--month` 또는 `--from`/`--to` 중 한 가지 방식의 기간 조건이 반드시 필요합니다. 같은 경로의 파일이 있으면 덮어씁니다.
 - `export` 결과를 그대로 `import` 할 수 있습니다(id는 새로 발급됩니다).
@@ -227,7 +254,30 @@ $ python -m budget_app import --from bank.csv --strict && echo "등록 완료" |
 | `가져올 파일을 찾을 수 없습니다` / `CSV 헤더에 필수 컬럼이 없습니다` | 경로 오타, 헤더 누락 | 경로 확인, 첫 줄을 `date,type,category,amount,memo,tags` 로 |
 | `같은 시각의 백업이 이미 있습니다` | 1초 안에 `backup` 을 두 번 실행 | 1초 뒤 재실행 |
 | `명령 형식이 올바르지 않습니다` (코드 2) | 옵션 이름 오타, 필수 옵션 누락 | `<command> --help` |
-| `예기치 못한 오류가 발생했습니다: ...` (코드 3) | 위 어디에도 속하지 않는 내부 오류 | `backup` 으로 보존 → `--verbose` 로 다시 실행해 어느 단계에서 멈추는지 확인 → 저장 파일 점검 |
+| `예기치 못한 오류가 발생했습니다: ...` (코드 3) | 위 어디에도 속하지 않는 내부 오류 | `backup` 으로 보존 → `--verbose` 로 다시 실행. 재현 보고에는 **실행한 명령 전체, 표준 오류 출력 전체(마지막 `[log]` 줄이 멈춘 단계), `ls -l data`, `python --version`** 네 가지를 모으면 충분합니다 |
+| `카테고리 대체(삭제) 도중 실패했습니다: ...` + `완료: ... / 남음: ...` | 규칙→거래→카테고리 중 한 단계에서 파일 오류 | 힌트의 `남음` 단계만 남아 있으므로 원인(권한·공간)을 고치고 같은 명령을 다시 실행 |
+
+### 디스크 가득 참·권한 오류가 났을 때
+
+쓰기 도중 오류가 나도 원본 파일은 바뀌지 않거나(수정·삭제), 쓰인 줄까지만 남습니다(추가·import). 아래 순서로 복구합니다.
+
+1. 원인을 없앱니다. 공간을 확보하거나(`df -h .`), 폴더 권한을 고치거나(`chmod u+rw data data/*.jsonl`), `--data-dir` 로 쓸 수 있는 폴더를 지정합니다.
+2. 남은 임시 파일을 지웁니다. `ls -a data/.*.tmp` 에 보이는 `.transactions.jsonl.<pid>.<난수>.tmp` 는 교체 직전에 중단된 복사본이라 지워도 됩니다.
+3. 읽히는지 확인합니다. `python -m budget_app list --limit 3`. 깨진 줄이 있으면 줄 번호가 나오므로 그 줄을 고치거나 백업으로 되돌립니다.
+4. 실패한 명령을 다시 실행합니다. `import` 는 `--skip-duplicates` 를 붙이면 이미 들어간 행을 건너뜁니다. 카테고리 대체는 남은 단계만 수행합니다. id 는 겹치지 않습니다.
+5. 그래도 안 되면 §4 의 백업 복구 절차로 되돌립니다.
+
+### 경계에서 들어오는 값의 검증 (타입 불일치 처리)
+
+타입 힌트는 실행 중에 검사되지 않으므로, 밖에서 들어오는 값은 세 경계에서 따로 검증합니다.
+
+| 경계 | 들어오는 형태 | 검사 | 어긋나면 |
+| --- | --- | --- | --- |
+| 명령행 옵션, 대화형 입력 | 문자열 | `validators.parse_*` 가 형식을 확인하고 `int`/`tuple` 로 변환 | 옵션은 `[오류]`+코드 1, 대화형은 그 항목만 재입력 |
+| CSV (`import`) | 전부 문자열. 헤더 이름으로 매핑 | 헤더에 필수 컬럼이 있는지 → 행마다 같은 `parse_*` 적용 | 헤더 오류는 전체 중단, 행 오류는 건너뛰거나(`--strict` 면 전체 취소) |
+| 저장 파일 (JSONL) | JSON 값(문자열/숫자/배열이 섞일 수 있음) | `from_dict` 로 꺼낸 뒤 `__post_init__` 이 타입·범위를 다시 검사 (`"amount": "100"` 처럼 문자열 숫자도 거부) | `DataFileError` 로 파일명과 줄 번호를 알리고 중단(코드 1) |
+
+세 경계가 모두 같은 검증 함수와 모델 검증을 거치므로, 어느 길로 들어와도 저장되는 `Transaction` 은 같은 규칙을 만족합니다.
 
 ### 실행 로그 (`--verbose`)
 
@@ -247,8 +297,8 @@ ID        | 날짜       | 타입    | 카테고리 |  금액 | 메모 | 태그
 ## 6.1 알아 둘 제한
 
 - 한 번에 한 프로세스만 쓰는 것을 전제로 합니다. 같은 데이터 폴더에 여러 프로세스가 동시에 쓰면 id가 겹칠 수 있습니다.
-- 같은 CSV를 두 번 `import` 하면 중복 검사 없이 두 번 등록됩니다. 다음 단계로 `--skip-duplicates`(날짜·타입·카테고리·금액·메모가 같은 거래가 이미 있으면 건너뜀) 옵션을 계획하고 있습니다. 설계는 [docs/03-evaluation-answers.md Q16](docs/03-evaluation-answers.md) 참고.
-- `search` 에 `--limit` 이 없으면 일치한 결과를 모두 모아 정렬합니다. 결과가 1,000건을 넘으면 `--limit` 사용을 권하는 안내를 표준 오류에 출력합니다.
+- 같은 CSV를 두 번 `import` 하면 기본으로는 두 번 등록됩니다. `--skip-duplicates` 를 붙여야 건너뜁니다(중복 기준은 §5).
+- `search` 에 `--limit` 이 없으면 일치한 결과를 모두 모아 정렬합니다. 결과가 1,000건을 넘으면 `--limit` 사용을 권하는 안내를 표준 오류에 먼저 출력합니다. 항상 상한을 두고 싶으면 `config.SEARCH_DEFAULT_LIMIT` 에 숫자를 넣으세요. 그러면 `--limit` 없는 `search` 가 그 건수까지만 보여 주고 안내합니다.
 - `recurring apply` 는 생성한 거래의 `recurring:<규칙 id>` 태그로 중복을 막습니다. 이 태그를 지우면 같은 달에 다시 생성됩니다.
 
 ## 7. 구조
@@ -283,6 +333,22 @@ samples/          import 용 예시 CSV
 cli.py → commands.py → services.py / recurring.py / csv_io.py / backup.py → repository.py / stores.py → storage.py
           (prompts.py, formatter.py 는 commands.py 만 사용)          (models.py, validators.py 는 모든 계층이 사용)
 ```
+
+주요 클래스의 책임은 한 줄씩 이렇습니다. 검증은 모델(자기 검증)과 서비스(카테고리 존재 등 파일을 봐야 아는 규칙)가, 저장은 저장소만 맡습니다.
+
+| 클래스 | 책임 |
+| --- | --- |
+| `Transaction`, `TransactionInput`, `Budget`, `RecurringRule` | 필드 정의와 자기 검증(잘못된 값으로는 만들어지지 않음) |
+| `SearchCriteria`, `MonthlySummary` | 검색 조건 판정, 요약의 파생값(잔액, 사용률, 초과 여부) |
+| `SequenceStore` | 마지막 발급 번호 보관(`meta.jsonl`) |
+| `TransactionRepository` | 거래 파일의 스트리밍 읽기·덧붙이기·원자적 재작성, 번호 예약 |
+| `CategoryStore`, `BudgetStore`, `RecurringStore` | 각자 파일 하나의 읽기·쓰기 |
+| `BudgetService` | 업무 규칙: 카테고리 확인, 최신순, 집계, 예산 비교, 삭제 정책 |
+| `RecurringService` | 반복 규칙 관리와 월별 적용(거래 생성은 `BudgetService` 에 위임) |
+| `AppContext` | 한 번의 실행에 필요한 객체 묶음 |
+| `KoreanArgumentParser` | 인자 형식 오류를 `[오류]/[힌트]` + 코드 2 로 변환 |
+
+저장소를 SQLite 등으로 바꿀 때의 체크리스트와 마이그레이션 절차는 [docs/03-evaluation-answers.md Q18](docs/03-evaluation-answers.md) 에 있습니다.
 
 ## 8. 테스트
 

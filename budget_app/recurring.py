@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from .errors import NotFoundError, ValidationError
+from .errors import NotFoundError, StepFailedError, ValidationError
 from .models import RecurringRule, SearchCriteria, Transaction, TransactionInput
 from .services import BudgetService
 from .stores import RecurringStore
@@ -83,8 +83,19 @@ class RecurringService:
                     for rule in rules
                 ]
             )
-        moved_transactions = self._ledger.remove_category(name, replace_with)
+        moved_transactions = self._remove_after_rules(name, replace_with, len(using))
         return CategoryRemoval(transactions=moved_transactions, rules=len(using))
+
+    def _remove_after_rules(self, name: str, replace_with: str | None, moved_rules: int) -> int:
+        """거래 이동과 카테고리 삭제를 맡기고, 실패하면 이미 옮긴 규칙까지 포함해 진행 상황을 알린다."""
+        try:
+            return self._ledger.remove_category(name, replace_with)
+        except StepFailedError as error:
+            if not moved_rules:
+                raise
+            rules_done = f"반복 규칙 {moved_rules}건을 '{replace_with}' 로 이동"
+            done = f"{rules_done}, {error.done}" if error.done else rules_done
+            raise StepFailedError("카테고리 대체", error.cause, done, error.remaining) from error.cause
 
     def apply(self, month: str) -> ApplyResult:
         """해당 월에 아직 생성되지 않은 규칙만 거래로 만든다(여러 번 실행해도 중복되지 않는다)."""

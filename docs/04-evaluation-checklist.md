@@ -14,7 +14,7 @@
 | 항목 3 (개념 설명) | 3 | 3 | - |
 | 항목 4 (설계 판단) | 3 | 3 | `import --strict`(롤백 방식) 추가, 10만 건 병목/개선 답변(Q15), 깨진 행 처리 답변(Q16) 추가 |
 
-이 문서를 바탕으로 받은 AI 사전평가(2026-10-17, 16/16 통과)의 항목별 "보완" 제안도 반영했습니다. 제안별 조치는 문서 끝의 [보완 제안 반영표](#ai-사전평가-보완-제안-반영-2026-10-17)에 있습니다.
+이 문서를 바탕으로 받은 AI 사전평가 두 차례(2026-10-17, 모두 16/16 통과)의 항목별 "보완" 제안도 반영했습니다. 제안별 조치는 문서 끝의 [1차 반영표](#ai-사전평가-보완-제안-반영-2026-10-17)와 [2차 반영표](#2차-ai-사전평가-보완-제안-반영-2026-10-17)에 있습니다.
 
 점검 중 모자란다고 본 것은 항목 4의 마지막 두 개였습니다. "병목과 개선"은 한계 목록(Q14)에만 짧게 있었고, "깨진 행 처리"는 부분 성공 한 가지만 구현되어 있어 롤백 전략을 비교해 설명하기 어려웠습니다. 두 가지 모두 코드와 답변을 보강했고, 테스트는 97개로 늘어 모두 통과합니다.
 
@@ -27,57 +27,59 @@
 **충족.** 8개 명령 모두 `python -m budget_app <command>` 로 동작하며, 명령마다 E2E 테스트가 실제 진입점(`main`)을 호출해 출력과 종료 코드를 검증합니다.
 `add` 는 대화형, 나머지는 `--옵션` 방식이고 `update` 는 옵션 방식으로 고정했습니다.
 
-- 명령 정의: [budget_app/cli.py#L44-L147](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/cli.py#L48-L154)
-- 명령 처리기: [budget_app/commands.py#L32-L169](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/commands.py#L34-L178)
-- E2E 테스트: [tests/test_cli.py#L22-L175](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L23-L178)
-- 실행 화면: [docs/02-result-report.md §3](https://github.com/newids/codyssey-b2-1/blob/main/docs/02-result-report.md?plain=1#L59), 명령 요약표: [README.md §2](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L36)
+- 명령 정의: [budget_app/cli.py#L44-L147](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/cli.py#L48-L165)
+- 명령 처리기: [budget_app/commands.py#L32-L169](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/commands.py#L34-L201)
+- E2E 테스트: [tests/test_cli.py#L22-L175](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L24-L192)
+- 실행 화면: [docs/02-result-report.md §3](https://github.com/newids/codyssey-b2-1/blob/main/docs/02-result-report.md?plain=1#L60), 명령 요약표: [README.md §2](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L36)
 
 ### 1-2. 프로그램 재실행 후에도 거래/카테고리/예산 데이터가 유지되는가? (저장 파일 3개 이상)
 
 **충족.** `./data` 에 `transactions / categories / budgets / recurring / meta` 5개 JSONL 파일로 저장하며, 첫 실행 때 없는 파일을 자동 생성합니다.
 테스트는 `create_app` 을 다시 호출해 새 프로세스처럼 읽어도 예산이 남아 있는지 확인합니다.
 
-- 파일 경로 정의: [budget_app/config.py#L23-L54](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/config.py#L24-L55)
+- 파일 경로 정의: [budget_app/config.py#L23-L54](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/config.py#L26-L57)
 - 초기화(자동 생성): [budget_app/app.py#L36-L49](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/app.py#L38-L51)
-- 테스트: [test_first_run_creates_files_and_default_categories](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L43), [test_budget_is_persisted_and_reflected_in_summary](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L159)
-- 파일 형식 설명: [README.md §4](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L125)
+- 테스트: [test_first_run_creates_files_and_default_categories](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L44), [test_budget_is_persisted_and_reflected_in_summary](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L160)
+- 파일 형식 설명: [README.md §4](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L140)
 
 ### 1-3. category add/list/remove가 정상 동작하는가? (삭제 시 사용 중인 카테고리 처리 포함)
 
 **충족.** 사용 중인 카테고리는 사용 건수를 알려 주며 삭제를 막고, `--replace-with` 를 주면 거래와 반복 규칙을 대체 카테고리로 옮긴 뒤 삭제합니다.
 대체 카테고리도 등록된 것이어야 하고, 삭제 대상과 같으면 거부합니다.
-세 파일은 **반복 규칙 → 거래 → 카테고리** 순서로 처리해, 도중에 실패해도 지워진 카테고리를 가리키는 데이터가 남지 않고 재실행하면 이어서 끝납니다(한 트랜잭션은 아님).
+세 파일은 **반복 규칙 → 거래 → 카테고리** 순서로 처리해, 도중에 실패해도 지워진 카테고리를 가리키는 데이터가 남지 않고 재실행하면 이어서 끝납니다(한 트랜잭션은 아님). 실패하면 `완료: ... / 남음: ...` 힌트로 어느 단계까지 됐는지 알려 줍니다.
 
-- 삭제 정책: [budget_app/services.py#L143-L168](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/services.py#L148-L180), 반복 규칙 처리: [budget_app/recurring.py#L60-L78](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/recurring.py#L62-L87)
-- 중단 테스트: [test_interrupted_category_replacement_leaves_no_dangling_reference](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L381)
-- 테스트: [test_category_in_use_cannot_be_removed_without_replacement](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L176), [test_category_removal_with_replacement_moves_transactions](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L185), [test_category_commands](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L117)
-- 실행 화면: [docs/02-result-report.md §3.6](https://github.com/newids/codyssey-b2-1/blob/main/docs/02-result-report.md?plain=1#L170)
+- 삭제 정책: [budget_app/services.py#L143-L168](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/services.py#L158-L199), 반복 규칙 처리: [budget_app/recurring.py#L60-L78](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/recurring.py#L62-L98)
+- 중단 테스트: [test_interrupted_category_replacement_leaves_no_dangling_reference](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L429)
+- 테스트: [test_category_in_use_cannot_be_removed_without_replacement](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L190), [test_category_removal_with_replacement_moves_transactions](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L199), [test_category_commands](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L130)
+- 실행 화면: [docs/02-result-report.md §3.6](https://github.com/newids/codyssey-b2-1/blob/main/docs/02-result-report.md?plain=1#L171)
 
 ### 1-4. budget set이 저장되며, summary에서 예산 사용률/초과 여부가 출력되는가?
 
 **충족.** `budget set` 은 `budgets.jsonl` 에 월별로 저장(같은 달은 덮어쓰기)되고, `summary` 는 예산이 있으면 `사용률 N%` 를, 80% 이상이면 `[주의]`, 초과하면 `[경고] 예산을 N원 초과했습니다!` 를 출력합니다.
+`budget remove --month` 로 지우면 그 달의 예산 줄과 경고가 요약에서 사라집니다. 변경·삭제가 요약에 미치는 영향은 README §3 표에 있습니다.
 
-- 저장: [budget_app/stores.py#L58-L71](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/stores.py#L60-L77), 사용률 계산: [budget_app/models.py#L258-L267](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/models.py#L258-L267), 출력: [budget_app/formatter.py#L93-L102](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/formatter.py#L93-L102)
-- 테스트: [test_budget_and_summary_with_warning](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L95), [test_budget_near_limit_shows_caution_and_income_only_month_has_no_ranking](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L180)
-- 실행 화면: [docs/02-result-report.md §3.4](https://github.com/newids/codyssey-b2-1/blob/main/docs/02-result-report.md?plain=1#L129)
+- 저장: [budget_app/stores.py#L58-L71](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/stores.py#L60-L80), 사용률 계산: [budget_app/models.py#L258-L267](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/models.py#L258-L258), 출력: [budget_app/formatter.py#L93-L102](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/formatter.py#L93-L102)
+- 삭제: [test_budget_remove_command](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L112), 영향 표: [README.md §3](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L132)
+- 테스트: [test_budget_and_summary_with_warning](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L96), [test_budget_near_limit_shows_caution_and_income_only_month_has_no_ranking](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L193)
+- 실행 화면: [docs/02-result-report.md §3.4](https://github.com/newids/codyssey-b2-1/blob/main/docs/02-result-report.md?plain=1#L130)
 
 ### 1-5. import/export가 명시된 CSV 스키마(UTF-8, 헤더, 컬럼)로 동작하는가?
 
 **충족.** 스키마 `date,type,category,amount,memo,tags` 를 상수로 고정해 export 헤더와 import 검증에 같이 쓰며, UTF-8(BOM 포함)로 읽고 씁니다.
-export 한 파일을 그대로 import 해도 메모의 쉼표·따옴표·여러 태그가 보존됩니다.
+export 한 파일을 그대로 import 해도 메모의 쉼표·따옴표·여러 태그가 보존됩니다. 엑셀의 cp949 저장·세미콜론 구분자·BOM 에 대한 주의는 README §5 와 `import --help` 에 적었습니다.
 
-- 스키마 상수와 입출력: [budget_app/csv_io.py#L17-L97](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/csv_io.py#L17-L97)
-- 테스트: [test_export_then_import_round_trips](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L210), [test_import_accepts_excel_bom_and_optional_columns_missing](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L270)
-- 스키마 문서: [README.md §5](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L142), 예시 파일: [samples/import_sample.csv](https://github.com/newids/codyssey-b2-1/blob/main/samples/import_sample.csv)
+- 스키마 상수와 입출력: [budget_app/csv_io.py#L17-L97](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/csv_io.py#L17-L138)
+- 테스트: [test_export_then_import_round_trips](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L224), [test_import_accepts_excel_bom_and_optional_columns_missing](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L318)
+- 스키마 문서: [README.md §5](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L184), 예시 파일: [samples/import_sample.csv](https://github.com/newids/codyssey-b2-1/blob/main/samples/import_sample.csv)
 
 ### 1-6. 잘못된 입력/파일 오류에서 스택트레이스 없이 오류 메시지와 해결 힌트를 출력하는가?
 
 **충족.** 모든 의도된 오류는 `BudgetAppError(message, hint)` 로 던지고, `handle_errors` 데코레이터가 `[오류] 원인` / `[힌트] 해결 방법` 두 줄로 바꿔 표준 오류에 출력합니다.
 깨진 저장 파일은 몇 번째 줄인지, 잘못된 CSV 는 몇 행인지 알려 주며, 예기치 못한 예외도 스택트레이스 없이 처리됩니다.
 
-- 예외 계층: [budget_app/errors.py#L12-L36](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/errors.py#L12-L36), 변환: [budget_app/decorators.py#L32-L69](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/decorators.py#L32-L69), 인자 오류: [budget_app/cli.py#L20-L31](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/cli.py#L23-L34)
-- 테스트: [test_corrupted_data_file_is_reported_without_traceback](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L309), [test_unreadable_data_files_are_data_errors_not_unexpected_errors](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L272)
-- 실행 화면: [docs/02-result-report.md §3.2, §3.5](https://github.com/newids/codyssey-b2-1/blob/main/docs/02-result-report.md?plain=1#L78)
+- 예외 계층: [budget_app/errors.py#L12-L36](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/errors.py#L12-L36), 변환: [budget_app/decorators.py#L32-L69](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/decorators.py#L32-L87), 인자 오류: [budget_app/cli.py#L20-L31](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/cli.py#L23-L34)
+- 테스트: [test_corrupted_data_file_is_reported_without_traceback](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L322), [test_unreadable_data_files_are_data_errors_not_unexpected_errors](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L285)
+- 실행 화면: [docs/02-result-report.md §3.2, §3.5](https://github.com/newids/codyssey-b2-1/blob/main/docs/02-result-report.md?plain=1#L79)
 
 ### 1-7. 오류 상황에서 종료 코드가 0이 아님을 확인할 수 있는가?
 
@@ -85,8 +87,8 @@ export 한 파일을 그대로 import 해도 메모의 쉼표·따옴표·여러
 실제 `python -m budget_app` 프로세스를 띄워 반환 코드를 확인하는 테스트가 있습니다.
 
 - 종료 코드 상수: [budget_app/errors.py#L5-L9](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/errors.py#L5-L9), 진입점: [budget_app/__main__.py](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/__main__.py)
-- 테스트: [test_module_entry_point_returns_exit_codes](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L349), [test_usage_errors_exit_with_2_and_hint](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L301), [test_handle_errors_converts_exceptions_to_exit_codes](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L366)
-- 종료 코드 표: [README.md §6](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L167)
+- 테스트: [test_module_entry_point_returns_exit_codes](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L427), [test_usage_errors_exit_with_2_and_hint](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L314), [test_handle_errors_converts_exceptions_to_exit_codes](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L444)
+- 종료 코드 표: [README.md §6](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L212)
 
 ---
 
@@ -97,7 +99,7 @@ export 한 파일을 그대로 import 해도 메모의 쉼표·따옴표·여러
 **충족.** 18개 모듈을 CLI(입력 해석·출력) → 서비스(업무 규칙) → 저장소(파일 입출력) → 모델(데이터 구조·검증) 네 계층으로 나누고, 의존은 위에서 아래로만 흐르게 했습니다.
 나누는 기준은 "무엇이 바뀔 때 어디만 고치면 되는가"입니다. 저장 포맷이 바뀌면 저장소만, 출력 모양이 바뀌면 CLI 만 고칩니다.
 
-- 구조도와 의존 방향: [README.md §7](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L195), [docs/01-mission-guide.md §3.1~3.2](https://github.com/newids/codyssey-b2-1/blob/main/docs/01-mission-guide.md?plain=1#L51)
+- 구조도와 의존 방향: [README.md §7](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L304), [docs/01-mission-guide.md §3.1~3.2](https://github.com/newids/codyssey-b2-1/blob/main/docs/01-mission-guide.md?plain=1#L51)
 - 답변: [docs/03-evaluation-answers.md Q2](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L37)
 - 조립 지점(계층 연결): [budget_app/app.py#L23-L33](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/app.py#L25-L35)
 
@@ -115,8 +117,8 @@ export 한 파일을 그대로 import 해도 메모의 쉼표·따옴표·여러
 수정 전에 id 존재와 값 유효성을 먼저 검사하고, 삭제한 id 는 `meta.jsonl` 의 일련번호 덕분에 재사용되지 않습니다.
 
 - 원자적 교체: [budget_app/storage.py#L77-L94](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/storage.py#L77-L94), 스트리밍 재작성: [budget_app/repository.py#L41-L61](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/repository.py#L46-L66), 검증 후 쓰기: [budget_app/services.py#L65-L86](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/services.py#L70-L88)
-- 테스트: [test_failed_atomic_write_keeps_original_and_leaves_no_temp_file](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_storage.py#L62), [test_update_failures_leave_data_untouched](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L116), [test_deleted_id_is_never_reused](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_storage.py#L142)
-- 답변: [docs/03-evaluation-answers.md Q7, Q8](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L195), 개념: [docs/01-mission-guide.md §5.4](https://github.com/newids/codyssey-b2-1/blob/main/docs/01-mission-guide.md?plain=1#L200)
+- 테스트: [test_failed_atomic_write_keeps_original_and_leaves_no_temp_file](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_storage.py#L62), [test_update_failures_leave_data_untouched](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L117), [test_deleted_id_is_never_reused](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_storage.py#L142)
+- 답변: [docs/03-evaluation-answers.md Q7, Q8](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L215), 개념: [docs/01-mission-guide.md §5.4](https://github.com/newids/codyssey-b2-1/blob/main/docs/01-mission-guide.md?plain=1#L201)
 
 ---
 
@@ -128,17 +130,17 @@ export 한 파일을 그대로 import 해도 메모의 쉼표·따옴표·여러
 30만 건(40MB) 실측에서 최대 메모리가 147KB 로, 전부 읽어 정렬한 182MB 의 약 1/1200 이었습니다. 메모리가 파일 크기와 무관해지는 것이 이점입니다.
 
 - 제너레이터: [budget_app/storage.py#L20-L38](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/storage.py#L20-L38), [budget_app/repository.py#L23-L25](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/repository.py#L28-L30), 최신 N건: [budget_app/services.py#L47-L63](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/services.py#L52-L68)
-- 테스트: [test_read_is_a_lazy_generator](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_storage.py#L20), [test_list_recent_is_newest_first_and_limited](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L63)
-- 실측: [docs/02-result-report.md §6](https://github.com/newids/codyssey-b2-1/blob/main/docs/02-result-report.md?plain=1#L287), 답변: [docs/03-evaluation-answers.md Q3](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L54), 개념: [docs/01-mission-guide.md §5.1](https://github.com/newids/codyssey-b2-1/blob/main/docs/01-mission-guide.md?plain=1#L160)
+- 테스트: [test_read_is_a_lazy_generator](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_storage.py#L20), [test_list_recent_is_newest_first_and_limited](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L64)
+- 실측: [docs/02-result-report.md §6](https://github.com/newids/codyssey-b2-1/blob/main/docs/02-result-report.md?plain=1#L323), 답변: [docs/03-evaluation-answers.md Q3](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L70), 개념: [docs/01-mission-guide.md §5.1](https://github.com/newids/codyssey-b2-1/blob/main/docs/01-mission-guide.md?plain=1#L161)
 
 ### 3-2. 데코레이터로 분리한 공통 기능이 무엇이며, "왜" 분리가 필요했는지 설명할 수 있는가?
 
 **충족.** `handle_errors`(예외 → 메시지·종료 코드), `log_call`(시작/완료/실패 로그), `timed`(소요 시간) 세 개를 만들어 `main` 과 서비스·저장소의 주요 메서드에 붙였습니다.
 이 셋은 모든 명령에 똑같이 필요하지만 가계부 로직과 무관합니다. 명령마다 `try/except` 를 반복하면 한 곳만 빠져도 스택트레이스가 노출되므로 한 곳에 모았습니다.
 
-- 구현: [budget_app/decorators.py#L32-L109](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/decorators.py#L32-L109), 적용: [budget_app/cli.py#L34-L35](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/cli.py#L37-L38), [budget_app/services.py#L47-L49](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/services.py#L52-L54)
-- 테스트: [test_decorators_preserve_function_identity_and_result](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L379), [test_verbose_prints_log_and_elapsed_time](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L341)
-- 답변: [docs/03-evaluation-answers.md Q4](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L90), 개념: [docs/01-mission-guide.md §5.2](https://github.com/newids/codyssey-b2-1/blob/main/docs/01-mission-guide.md?plain=1#L180)
+- 구현: [budget_app/decorators.py#L32-L109](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/decorators.py#L32-L127), 적용: [budget_app/cli.py#L34-L35](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/cli.py#L37-L38), [budget_app/services.py#L47-L49](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/services.py#L52-L54)
+- 테스트: [test_decorators_preserve_function_identity_and_result](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L457), [test_verbose_prints_log_and_elapsed_time](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L419)
+- 답변: [docs/03-evaluation-answers.md Q4](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L106), 개념: [docs/01-mission-guide.md §5.2](https://github.com/newids/codyssey-b2-1/blob/main/docs/01-mission-guide.md?plain=1#L181)
 
 ### 3-3. 타입 힌트를 적용해 얻는 이점을 실제 코드 예로 "어떻게" 확인했고 "왜" 도움이 되는지 설명할 수 있는가?
 
@@ -147,8 +149,8 @@ export 한 파일을 그대로 import 해도 메모의 쉼표·따옴표·여러
 검증은 `mypy --strict budget_app` 으로 하며 19개 모듈 오류 0건입니다(실행에는 불필요, 개발용 설치).
 
 - 예시 코드: [budget_app/repository.py#L16-L45](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/repository.py#L15-L45), [budget_app/models.py#L66-L80](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/models.py#L66-L80), 제네릭 `ask`: [budget_app/prompts.py#L14](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/prompts.py#L14)
-- 타입 검사 실행법: [README.md §8](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L287)
-- 답변: [docs/03-evaluation-answers.md Q5](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L133), 개념: [docs/01-mission-guide.md §5.3](https://github.com/newids/codyssey-b2-1/blob/main/docs/01-mission-guide.md?plain=1#L194)
+- 타입 검사 실행법: [README.md §8](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L353)
+- 답변: [docs/03-evaluation-answers.md Q5](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L149), 개념: [docs/01-mission-guide.md §5.3](https://github.com/newids/codyssey-b2-1/blob/main/docs/01-mission-guide.md?plain=1#L195)
 
 ---
 
@@ -159,8 +161,8 @@ export 한 파일을 그대로 import 해도 메모의 쉼표·따옴표·여러
 **충족.** JSONL 은 태그 같은 목록 값과 숫자/문자열 타입을 그대로 담고 한 줄이 한 레코드라 스트리밍·덧붙이기가 쉽지만 엑셀로 열기 불편합니다. CSV 는 그 반대입니다.
 그래서 내부 저장은 JSONL, 사람과 주고받는 용도는 import/export 의 CSV 로 역할을 나눴습니다.
 
-- 비교표와 근거: [docs/03-evaluation-answers.md Q6](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L183), 결정 기록: [docs/01-mission-guide.md §2.2](https://github.com/newids/codyssey-b2-1/blob/main/docs/01-mission-guide.md?plain=1#L36)
-- 저장 형식 예시: [README.md §4](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L125)
+- 비교표와 근거: [docs/03-evaluation-answers.md Q6](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L199), 결정 기록: [docs/01-mission-guide.md §2.2](https://github.com/newids/codyssey-b2-1/blob/main/docs/01-mission-guide.md?plain=1#L36)
+- 저장 형식 예시: [README.md §4](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L140)
 
 ### 4-2. 거래가 10만 건으로 늘어난다면, 현재 구조에서 병목이 어디이며 "어떻게" 개선할지 설명할 수 있는가?
 
@@ -168,19 +170,20 @@ export 한 파일을 그대로 import 해도 메모의 쉼표·따옴표·여러
 개선은 월별 파일 분할 → 역순 읽기로 `list` 조기 종료 → id 오프셋 인덱스 → `sqlite3` 저장소 교체 순서이며, 서비스가 저장소 인터페이스만 쓰므로 저장소 계층만 바꾸면 됩니다.
 예상 효과(추정)는 월별 분할만으로 월 단위 명령이 약 1/24(0.07초), 역순 읽기로 `list` 가 수 ms, SQLite 로 조회·수정 모두 수 ms 입니다.
 
-- 답변: [docs/03-evaluation-answers.md Q15](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L265)
-- 실측 근거(30만 건): [docs/02-result-report.md §6](https://github.com/newids/codyssey-b2-1/blob/main/docs/02-result-report.md?plain=1#L287)
+- 답변: [docs/03-evaluation-answers.md Q15](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L299)
+- 실측 근거(30만 건): [docs/02-result-report.md §6](https://github.com/newids/codyssey-b2-1/blob/main/docs/02-result-report.md?plain=1#L323)
 - 병목 지점 코드: 전체 스캔 [budget_app/repository.py#L23-L28](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/repository.py#L28-L33), 전체 재작성 [budget_app/repository.py#L41-L61](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/repository.py#L46-L66)
 
 ### 4-3. import CSV에 일부 깨진 행이 섞이면, "어떻게" 처리해 사용자 신뢰를 지킬지 (부분 성공/롤백/리포트) 설명할 수 있는가?
 
 **충족(이번에 보강).** 기본은 **부분 성공**: 올바른 행만 등록하고 `imported=N, skipped=M` 과 건너뛴 행의 번호·사유를 리포트합니다. `--strict` 를 주면 **롤백**: 잘못된 행이 하나라도 있으면 아무것도 등록하지 않고 종료 코드 1 로 끝납니다.
 어느 방식이든 모든 행을 검증한 뒤에 한 번만 쓰므로 절반만 들어가는 일이 없고, 헤더가 틀리면 읽기 전에 중단합니다.
-같은 CSV 재입력의 중복은 아직 막지 않으며, `--skip-duplicates`(날짜·타입·카테고리·금액·메모 일치 시 건너뜀) 옵션을 다음 단계로 설계해 두었습니다.
+같은 CSV 재입력은 `--skip-duplicates`(날짜·타입·카테고리·금액·메모가 같은 행을 저장된 개수만큼 `이미 있는 거래` 로 건너뜀) 로 막습니다. 같은 파일을 다시 넣으면 멱등이고 실제 반복 거래는 남으며, `--strict` 와 함께 써도 중복은 실패 사유가 아닙니다.
 
-- 구현: [budget_app/csv_io.py#L31-L62](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/csv_io.py#L31-L62), 리포트 출력: [budget_app/commands.py#L154-L162](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/commands.py#L162-L170)
-- 테스트: [test_import_skips_invalid_rows_with_reasons](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L231), [test_strict_import_registers_nothing_when_any_row_is_invalid](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L247), [test_strict_import_exits_with_error_and_writes_nothing](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L205)
-- 답변: [docs/03-evaluation-answers.md Q16](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L284), 사용법: [README.md §5](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L161)
+- 구현: [budget_app/csv_io.py#L31-L62](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/csv_io.py#L35-L108), 리포트 출력: [budget_app/commands.py#L154-L162](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/commands.py#L183-L193-L189)
+- 중복 감지: [test_skip_duplicates_ignores_rows_already_stored_and_repeated_in_file](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L284), [test_import_skip_duplicates_option_reports_duplicates](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L367)
+- 테스트: [test_import_skips_invalid_rows_with_reasons](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L245), [test_strict_import_registers_nothing_when_any_row_is_invalid](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L261), [test_strict_import_exits_with_error_and_writes_nothing](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L218)
+- 답변: [docs/03-evaluation-answers.md Q16](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L331), 사용법: [README.md §5](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L205)
 
 ---
 
@@ -191,20 +194,46 @@ export 한 파일을 그대로 import 해도 메모의 쉼표·따옴표·여러
 | # | 제안 | 조치 | 위치 |
 | --- | --- | --- | --- |
 | 1 | 핵심 명령의 실패/경계 E2E 사례를 docs 에 추가 | 22개 경계·실패 사례를 명령·입력·결과·종료 코드·테스트 이름으로 표로 정리 | [02-result-report.md §3.10](https://github.com/newids/codyssey-b2-1/blob/main/docs/02-result-report.md?plain=1#L236) |
-| 2 | 백업 → 복원 절차 추가 | `backup` 뒤 `cp data/backups/<시각>/*.jsonl data/` 로 되돌리는 예시와 주의점(5개 파일 함께, 실행 중 아님) | [README.md §4 백업과 복구](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L145) |
-| 3 | 카테고리 대체 중 실패 시 롤백 보증 설명 | 점검 중 실제 문제 발견: 카테고리를 지운 **뒤에** 규칙을 옮겨 중간 실패 시 규칙이 지워진 카테고리를 가리켰음. 규칙 → 거래 → 카테고리 순서로 고치고 중단 테스트 추가, 보증 범위를 문서화 | [recurring.py#L62-L86](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/recurring.py#L62-L87), [테스트](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L381), [03 Q12](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L254) |
-| 4 | 예산 경고 임계값 변경 방법 안내 | `config.BUDGET_WARNING_RATE` 위치와 "옵션으로 두지 않은 이유"를 README 에 명시, 상수에 주석 | [README.md §3](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L125), [config.py#L11](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/config.py#L11) |
-| 5 | 대용량 CSV 성능·중단 테스트 추가 | 1만 행 import(약 1초, 상한 10초 검증)와 "2행 쓴 뒤 디스크 가득 참" 시나리오(파일 읽기 가능, id 재사용 없음, 재실행 정상) 테스트 | [대용량](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L302), [중단](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L317) |
-| 6 | 내부 오류의 구체적 힌트 보강 | 자주 보는 오류 10가지의 메시지·원인·해결 표(권한, 디스크 공간, 깨진 줄, 코드 2/3 포함) | [README.md §6 자주 보는 오류와 해결](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L217) |
-| 7 | 종료 코드 확인 셸 예시 | `; echo "exit=$?"` 와 `&& ... \|\| ...` 예시 | [README.md §6](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L203) |
-| 8 | 모듈 의존 다이어그램 | 두 줄 텍스트 다이어그램(`cli → commands → services → repository → storage`) 추가 | [README.md §7](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L280) |
-| 9 | 주요 클래스의 책임 한 문장 | 9개 클래스에 docstring 추가, 답변서에 클래스별 책임표와 일련번호 책임 분리(보관/예약/무관) 설명 | [03 Q2 클래스별 책임](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L54), [services.py#L26](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/services.py#L26), [repository.py#L18](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/repository.py#L18) |
-| 10 | 권한 유지 정책 한 줄 | 원본 권한 상속, 임시 파일은 같은 폴더, 폴더 쓰기 권한만 필요함을 README 에 명시 | [README.md §4](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L143) |
-| 11 | `search --limit` 미지정 시 경고/권장 | 결과가 1,000건을 넘으면 표준 오류에 `--limit` 권장 안내, 도움말 문구 보강, 테스트 추가 | [commands.py#L58-L82](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/commands.py#L58-L83), [테스트](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L327) |
-| 12 | `--verbose` 로그 예시 | 실제 출력 예시와 어느 데코레이터가 어떤 줄을 남기는지, 로그 수준 설명 | [README.md §6 실행 로그](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L232) |
-| 13 | 타입 검사 실행법 | `mypy --strict budget_app` 안내. 실행해 보니 6곳 지적 → 모두 수정해 0건 | [README.md §8](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L287), [cli.py#L17-L20](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/cli.py#L17-L20) |
+| 2 | 백업 → 복원 절차 추가 | `backup` 뒤 `cp data/backups/<시각>/*.jsonl data/` 로 되돌리는 예시와 주의점(5개 파일 함께, 실행 중 아님) | [README.md §4 백업과 복구](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L158) |
+| 3 | 카테고리 대체 중 실패 시 롤백 보증 설명 | 점검 중 실제 문제 발견: 카테고리를 지운 **뒤에** 규칙을 옮겨 중간 실패 시 규칙이 지워진 카테고리를 가리켰음. 규칙 → 거래 → 카테고리 순서로 고치고 중단 테스트 추가, 보증 범위를 문서화 | [recurring.py#L62-L86](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/recurring.py#L62-L98), [테스트](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L429), [03 Q12](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L257) |
+| 4 | 예산 경고 임계값 변경 방법 안내 | `config.BUDGET_WARNING_RATE` 위치와 "옵션으로 두지 않은 이유"를 README 에 명시, 상수에 주석 | [README.md §3](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L140), [config.py#L11](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/config.py#L11) |
+| 5 | 대용량 CSV 성능·중단 테스트 추가 | 1만 행 import(약 1초, 상한 10초 검증)와 "2행 쓴 뒤 디스크 가득 참" 시나리오(파일 읽기 가능, id 재사용 없음, 재실행 정상) 테스트 | [대용량](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L350), [중단](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L365) |
+| 6 | 내부 오류의 구체적 힌트 보강 | 자주 보는 오류 10가지의 메시지·원인·해결 표(권한, 디스크 공간, 깨진 줄, 코드 2/3 포함) | [README.md §6 자주 보는 오류와 해결](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L244) |
+| 7 | 종료 코드 확인 셸 예시 | `; echo "exit=$?"` 와 `&& ... \|\| ...` 예시 | [README.md §6](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L230) |
+| 8 | 모듈 의존 다이어그램 | 두 줄 텍스트 다이어그램(`cli → commands → services → repository → storage`) 추가 | [README.md §7](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L330) |
+| 9 | 주요 클래스의 책임 한 문장 | 9개 클래스에 docstring 추가, 답변서에 클래스별 책임표와 일련번호 책임 분리(보관/예약/무관) 설명 | [03 Q2 클래스별 책임](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L70), [services.py#L26](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/services.py#L26), [repository.py#L18](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/repository.py#L18) |
+| 10 | 권한 유지 정책 한 줄 | 원본 권한 상속, 임시 파일은 같은 폴더, 폴더 쓰기 권한만 필요함을 README 에 명시 | [README.md §4](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L156) |
+| 11 | `search --limit` 미지정 시 경고/권장 | 결과가 1,000건을 넘으면 표준 오류에 `--limit` 권장 안내, 도움말 문구 보강, 테스트 추가 | [commands.py#L58-L82](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/commands.py#L58-L94), [테스트](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L340) |
+| 12 | `--verbose` 로그 예시 | 실제 출력 예시와 어느 데코레이터가 어떤 줄을 남기는지, 로그 수준 설명 | [README.md §6 실행 로그](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L282) |
+| 13 | 타입 검사 실행법 | `mypy --strict budget_app` 안내. 실행해 보니 6곳 지적 → 모두 수정해 0건 | [README.md §8](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L353), [cli.py#L17-L20](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/cli.py#L17-L20) |
 | 14 | JSONL 단점(엑셀 친화성) 명시 | 비교표 아래에 JSONL 단점 3가지와 보완 수단(export CSV, 줄 번호 오류, backup) 추가 | [03 Q6](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L209) |
-| 15 | 개선안별 예상 효과 수치 | 실측(6만 건/초) 기반 추정표: 월별 분할 1/24, 역순 읽기 수 ms, SQLite 수 ms, 구현 비용 | [03 Q15 예상 효과](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L307) |
-| 16 | import 중복 감지 옵션 향후 방안 | `--skip-duplicates` 설계(기준 키, 동작, 메모리, 기본값을 끄는 이유) 문서화 | [03 Q16 향후 보완](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L338), [README.md §6.1](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L250) |
+| 15 | 개선안별 예상 효과 수치 | 실측(6만 건/초) 기반 추정표: 월별 분할 1/24, 역순 읽기 수 ms, SQLite 수 ms, 구현 비용 | [03 Q15 예상 효과](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L318) |
+| 16 | import 중복 감지 옵션 향후 방안 | `--skip-duplicates` 설계(기준 키, 동작, 메모리, 기본값을 끄는 이유) 문서화 | [03 Q16 향후 보완](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L350), [README.md §6.1](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L300) |
 
 설계 규칙으로도 남겼습니다: [01-mission-guide.md §3.3 규칙 7](https://github.com/newids/codyssey-b2-1/blob/main/docs/01-mission-guide.md?plain=1#L95).
+
+---
+
+## 2차 AI 사전평가 보완 제안 반영 (2026-10-17)
+
+1차 반영 뒤의 재평가(16/16 PASS)에서 나온 제안입니다. 코드가 바뀐 것은 #3, #4, #6, #7, #11, #12, #16 입니다(테스트 101 → 110개, `mypy --strict` 0건).
+
+| # | 제안 | 조치 | 위치 |
+| --- | --- | --- | --- |
+| 1 | 핵심 명령의 E2E 실패 시나리오 추가 | 경계·실패 사례표에 6행 추가(중복 import, 예산 삭제, 마지막 단계 실패, 기본 상한, 종료 코드 29가지) + 실패 입력 29가지의 종료 코드를 한 표로 고정한 테스트 | [02 §3.10](https://github.com/newids/codyssey-b2-1/blob/main/docs/02-result-report.md?plain=1#L236), [test_exit_codes_per_failure_case](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L381) |
+| 2 | 백업 복구 후 무결성 검증 절차 | 건수 비교 → 세 파일 읽기 → `meta` 값과 최대 id 비교 → 요약 확인 4단계와, `meta` 가 작을 때의 처리(삭제하면 최대 번호에서 이어 감) | [README.md §4 복구 뒤 확인](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L173) |
+| 3 | 대체 실패 시 완료/남은 단계 출력 | `StepFailedError` 추가. 검증 뒤 어느 단계에서 실패해도 실제 상태로 만든 `완료: ... / 남음: ...` 힌트. 테스트 3개 | [errors.py#L39-L59](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/errors.py#L39-L60), [recurring.py#L89-L108](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/recurring.py#L89-L98), [테스트](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L459), [03 Q12](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L268) |
+| 4 | 예산 변경/삭제의 영향 문서화 | `budget remove --month` 명령 추가(없던 기능) + 변경·삭제·미설정이 요약에 미치는 영향 표 | [README.md §3](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L132), [commands.py#L122-L125](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/commands.py#L125-L128), [테스트](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L112) |
+| 5 | 엑셀/지역별 인코딩 주의 | cp949 저장 문제와 "CSV UTF-8" 선택, 세미콜론 미지원, export 가 BOM 없는 UTF-8 인 이유와 엑셀에서 여는 법. `import --help` 에도 한 줄 | [README.md §5](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L203), [cli.py#L136-L142](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/cli.py#L136-L142) |
+| 6 | 예기치 못한 오류 힌트에 수집 항목 | 힌트에 "명령 전체 + `--verbose` 출력(마지막 `[log]` 줄)" 명시, README 표에 수집 항목 4가지 | [decorators.py#L76-L85](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/decorators.py#L76-L85), [README.md §6 표](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L257) |
+| 7 | 오류별 기대 종료 코드 테스트 | 29가지 실패 입력에 기대 코드(0/1/2)를 명시한 `subTest` 표 | [test_exit_codes_per_failure_case](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L381) |
+| 8 | 저장소 교체 체크리스트 | SQLite 전환 시 모듈별 변경 범위, 6단계 체크리스트, 4단계 마이그레이션 절차 | [03 Q18](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L367) |
+| 9 | README 에 클래스별 책임 표 | 구조 섹션에 9개 클래스 책임 표와 "검증은 모델·서비스, 저장은 저장소" 한 줄 | [README.md §7](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L337) |
+| 10 | 디스크 가득 참/권한 오류 복구 순서 | 원인 제거 → 임시 파일 정리 → 읽기 확인 → 재실행(`--skip-duplicates`) → 백업 복구 5단계 | [README.md §6 복구 순서](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L260) |
+| 11 | 대량 결과 기본 상한 옵션 | `config.SEARCH_DEFAULT_LIMIT`(기본 None). 설정하면 `--limit` 없는 `search` 가 그 건수만 보여 주고 안내. 옵션이 아닌 상수로 둔 이유를 문서화 | [config.py#L13-L14](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/config.py#L13-L14), [commands.py#L83-L94](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/commands.py#L83-L94), [테스트](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_cli.py#L354) |
+| 12 | 데코레이터 사용 예·예외 매핑 주석 | `handle_errors` docstring 에 예외 → 종료 코드 표와 사용 예 | [decorators.py#L32-L50](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/decorators.py#L32-L50) |
+| 13 | 경계에서의 타입 불일치 처리 | 세 경계(옵션/대화형, CSV, 저장 파일)별 검사와 실패 처리 표 | [README.md §6 경계 검증](https://github.com/newids/codyssey-b2-1/blob/main/README.md?plain=1#L270) |
+| 14 | 포맷 전환 비용·마이그레이션 | Q6 에 Q18 참조, Q18 에 모듈별 변경 규모(약 200줄)와 절차 | [03 Q18](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L367) |
+| 15 | 개선안별 개발 비용·리스크 | Q15 표에 예상 개발 시간(반나절~3일)과 운영 리스크 열 추가 | [03 Q15 표](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L318) |
+| 16 | `--skip-duplicates` 구현 | 계획대로 구현. 저장된 개수만큼 상쇄하는 방식(같은 파일 재입력은 멱등, 실제 반복 거래는 보존), 사유 보고, `--strict` 와 조합 규칙 정의. 테스트 3개 | [csv_io.py#L34-L100](https://github.com/newids/codyssey-b2-1/blob/main/budget_app/csv_io.py#L35-L108), [테스트](https://github.com/newids/codyssey-b2-1/blob/main/tests/test_services.py#L284), [03 Q16](https://github.com/newids/codyssey-b2-1/blob/main/docs/03-evaluation-answers.md?plain=1#L350) |
+

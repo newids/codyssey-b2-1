@@ -74,6 +74,10 @@ class BudgetStore:
         ordered = sorted([*others, budget], key=lambda item: item.month)
         write_jsonl_atomic(self._path, (item.to_dict() for item in ordered))
 
+    def remove(self, month: str) -> None:
+        remaining = [existing for existing in self.iter_all() if existing.month != month]
+        write_jsonl_atomic(self._path, (item.to_dict() for item in remaining))
+
 
 class RecurringStore:
     """반복 규칙 파일 하나를 담당하고, 규칙 id 는 SequenceStore 에서 발급받는다."""

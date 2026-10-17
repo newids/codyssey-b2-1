@@ -7,7 +7,7 @@ from dataclasses import replace
 from typing import Any, Iterator, Mapping, Sequence
 
 from .decorators import log_call, timed
-from .errors import NotFoundError, ValidationError
+from .errors import BudgetAppError, NotFoundError, StepFailedError, ValidationError
 from .models import (
     EXPENSE,
     Budget,
@@ -130,6 +130,16 @@ class BudgetService:
     def list_budgets(self) -> list[Budget]:
         return list(self._budgets.iter_all())
 
+    def remove_budget(self, month: str) -> Budget:
+        """월 예산을 지운다. 이후 summary 는 그 달의 예산 줄과 경고를 출력하지 않는다."""
+        budget = self._budgets.get(month)
+        if budget is None:
+            raise NotFoundError(
+                f"{month} 예산이 설정되어 있지 않습니다.", hint="budget list 로 설정된 달을 확인하세요."
+            )
+        self._budgets.remove(month)
+        return budget
+
     # ----- 카테고리 -----
 
     def list_categories(self) -> list[str]:
@@ -171,11 +181,20 @@ class BudgetService:
                 hint=f"category remove --name {name} --replace-with <대체 카테고리> 로 "
                 "거래를 옮긴 뒤 삭제할 수 있습니다.",
             )
-        if in_use and replace_with is not None:
-            self._transactions.rewrite(
-                lambda tx: replace(tx, category=replace_with) if tx.category == name else tx
-            )
-        self._categories.remove(name)
+        action = "카테고리 삭제" if replace_with is None else "카테고리 대체"
+        move = f"거래 {in_use}건을 '{replace_with}' 로 이동" if in_use else ""
+        delete = f"카테고리 '{name}' 삭제"
+        try:
+            if move and replace_with is not None:
+                self._transactions.rewrite(
+                    lambda tx: replace(tx, category=replace_with) if tx.category == name else tx
+                )
+        except (OSError, BudgetAppError) as error:
+            raise StepFailedError(action, error, done="", remaining=f"{move}, {delete}") from error
+        try:
+            self._categories.remove(name)
+        except (OSError, BudgetAppError) as error:
+            raise StepFailedError(action, error, done=move, remaining=delete) from error
         return in_use
 
     def require_category(self, name: str) -> str:

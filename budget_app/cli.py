@@ -133,11 +133,22 @@ def _add_report_commands(add_command: AddCommand) -> None:
 
 def _add_transfer_commands(add_command: AddCommand) -> None:
     importing = add_command("import", "CSV 파일의 거래를 일괄 등록")
-    importing.add_argument("--from", dest="source", required=True, metavar="CSV", help="가져올 CSV")
+    importing.add_argument(
+        "--from",
+        dest="source",
+        required=True,
+        metavar="CSV",
+        help="가져올 CSV (UTF-8, 쉼표 구분. 엑셀에서는 'CSV UTF-8(쉼표로 분리)' 형식으로 저장)",
+    )
     importing.add_argument(
         "--strict",
         action="store_true",
         help="잘못된 행이 하나라도 있으면 아무것도 등록하지 않음 (기본: 올바른 행만 등록)",
+    )
+    importing.add_argument(
+        "--skip-duplicates",
+        action="store_true",
+        help="날짜·타입·카테고리·금액·메모가 같은 거래가 이미 있으면 건너뜀 (같은 파일을 두 번 넣어도 안전)",
     )
     importing.set_defaults(handler=commands.cmd_import)
 
@@ -153,7 +164,9 @@ def _add_transfer_commands(add_command: AddCommand) -> None:
 
 
 def _add_budget_commands(budget: argparse.ArgumentParser, common: argparse.ArgumentParser) -> None:
-    actions = budget.add_subparsers(dest="action", metavar="<set|show|list>", required=True)
+    actions = budget.add_subparsers(
+        dest="action", metavar="<set|show|list|remove>", required=True
+    )
 
     setting = actions.add_parser("set", help="월 예산 저장", parents=[common], allow_abbrev=False)
     setting.add_argument("--month", required=True, metavar="YYYY-MM", help="대상 월")
@@ -166,6 +179,12 @@ def _add_budget_commands(budget: argparse.ArgumentParser, common: argparse.Argum
 
     listing = actions.add_parser("list", help="전체 예산 목록", parents=[common])
     listing.set_defaults(handler=commands.cmd_budget_list)
+
+    removing = actions.add_parser(
+        "remove", help="월 예산 삭제", parents=[common], allow_abbrev=False
+    )
+    removing.add_argument("--month", required=True, metavar="YYYY-MM", help="대상 월")
+    removing.set_defaults(handler=commands.cmd_budget_remove)
 
 
 def _add_category_commands(

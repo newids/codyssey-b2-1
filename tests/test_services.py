@@ -15,6 +15,7 @@ from budget_app.csv_io import export_transactions, import_transactions
 from budget_app.errors import BudgetAppError, DataFileError, NotFoundError, ValidationError
 from budget_app.models import SearchCriteria
 from budget_app.repository import TransactionRepository
+from budget_app.stores import CategoryStore
 
 from .helpers import DataDirTestCase, expense, income
 
@@ -168,6 +169,19 @@ class LedgerTests(DataDirTestCase):
         self.assertTrue(summary.is_over_budget)
         self.assertEqual(len(self.ledger.list_budgets()), 1)
 
+    def test_budget_remove_drops_month_and_summary_loses_budget_line(self) -> None:
+        self.seed()
+        self.ledger.set_budget("2024-01", 500000)
+        self.ledger.set_budget("2024-02", 100000)
+
+        removed = self.ledger.remove_budget("2024-01")
+
+        self.assertEqual(removed.amount, 500000)
+        self.assertIsNone(self.ledger.summarize("2024-01", 3).budget)
+        self.assertEqual([b.month for b in self.ledger.list_budgets()], ["2024-02"])
+        with self.assertRaises(NotFoundError):
+            self.ledger.remove_budget("2024-01")
+
     def test_category_add_rejects_duplicates(self) -> None:
         self.assertEqual(self.ledger.add_category(" hobby "), "hobby")
         with self.assertRaises(ValidationError):
@@ -266,6 +280,40 @@ class CsvTransferTests(DataDirTestCase):
         result = import_transactions(self.ledger, self.csv_path, strict=True)
 
         self.assertEqual((result.imported, result.skipped), (1, ()))
+
+    def test_skip_duplicates_ignores_rows_already_stored_and_repeated_in_file(self) -> None:
+        self.ledger.add_transaction(expense("2024-01-15", 15000, memo="점심", tags=("old",)))
+        self.csv_path.write_text(
+            "date,type,category,amount,memo,tags\n"
+            "2024-01-15,expense,food,15000, 점심 ,new\n"    # 저장된 거래와 같음(태그·메모 공백은 무시)
+            "2024-01-16,expense,food,15000,점심,\n"         # 날짜가 다르므로 새 거래
+            "2024-01-16,expense,food,15000,점심,\n"         # 같은 날 같은 금액을 실제로 두 번 쓴 경우: 남는다
+            "2024-01-16,expense,food,15000,저녁,\n"         # 메모가 다르므로 새 거래
+            "2024-13-40,expense,food,1,,\n",                 # 잘못된 행
+            encoding="utf-8",
+        )
+
+        first = import_transactions(self.ledger, self.csv_path, skip_duplicates=True)
+        again = import_transactions(self.ledger, self.csv_path, skip_duplicates=True)
+        plain = import_transactions(self.ledger, self.csv_path)
+
+        self.assertEqual(first.imported, 3)
+        self.assertEqual([reason.split(":")[0] for reason in first.skipped], ["2행", "6행"])
+        self.assertIn("이미 있는 거래", first.skipped[0])
+        self.assertEqual(again.imported, 0)  # 같은 파일을 다시 넣으면 저장된 개수만큼 모두 상쇄된다
+        self.assertEqual(len(again.skipped), 5)
+        self.assertEqual(plain.imported, 4)  # 옵션이 없으면 전부 다시 등록된다
+
+    def test_strict_import_with_skip_duplicates_only_fails_on_invalid_rows(self) -> None:
+        self.ledger.add_transaction(expense("2024-01-15", 15000))
+        self.csv_path.write_text(
+            "date,type,category,amount\n2024-01-15,expense,food,15000\n2024-01-16,expense,food,1\n",
+            encoding="utf-8",
+        )
+
+        result = import_transactions(self.ledger, self.csv_path, strict=True, skip_duplicates=True)
+
+        self.assertEqual((result.imported, len(result.skipped)), (1, 1))
 
     def test_import_accepts_excel_bom_and_optional_columns_missing(self) -> None:
         self.csv_path.write_text(
@@ -389,7 +437,7 @@ class RecurringAndBackupTests(DataDirTestCase):
             autospec=True,
             side_effect=OSError(5, "Input/output error"),
         ):
-            with self.assertRaises(OSError):
+            with self.assertRaises(BudgetAppError) as caught:
                 self.ctx.recurring.remove_category("gym", replace_with="etc")
         transaction_after_failure = self.ctx.ledger.list_recent(1)[0]
         rule_after_failure = self.ctx.recurring.list_rules()[0]
@@ -398,12 +446,42 @@ class RecurringAndBackupTests(DataDirTestCase):
 
         # 규칙 → 거래 → 카테고리 순서로 처리하므로, 중간에 멈춰도 지워진 카테고리를 가리키는 데이터가 없다.
         # 재실행은 남은 단계만 수행하므로 이미 옮겨진 규칙은 0건으로 보고된다.
+        self.assertIn("Input/output error", caught.exception.message)
+        self.assertIn("완료: 반복 규칙 1건", caught.exception.hint)
+        self.assertIn("남음: 거래 1건을 'etc' 로 이동, 카테고리 'gym' 삭제", caught.exception.hint)
         self.assertEqual(rule_after_failure.category, "etc")
         self.assertEqual(transaction_after_failure.category, "gym")
         self.assertIn("gym", categories_after_failure)
         self.assertEqual((retried.transactions, retried.rules), (1, 0))
         self.assertEqual(self.ctx.ledger.list_recent(1)[0].category, "etc")
         self.assertNotIn("gym", self.ctx.ledger.list_categories())
+
+    def test_failure_at_last_step_reports_moved_counts_and_remaining_step(self) -> None:
+        self.ctx.ledger.add_category("gym")
+        self.ctx.ledger.add_transaction(expense("2024-01-10", 50000, "gym"))
+
+        with mock.patch.object(
+            CategoryStore, "remove", autospec=True, side_effect=OSError(5, "Input/output error")
+        ):
+            with self.assertRaises(BudgetAppError) as caught:
+                self.ctx.recurring.remove_category("gym", replace_with="etc")
+
+        self.assertIn("완료: 거래 1건", caught.exception.hint)
+        self.assertIn("남음: 카테고리 'gym' 삭제", caught.exception.hint)
+        self.assertEqual(self.ctx.ledger.list_recent(1)[0].category, "etc")
+        self.assertIn("gym", self.ctx.ledger.list_categories())
+
+    def test_failure_before_any_step_reports_nothing_done(self) -> None:
+        self.ctx.ledger.add_category("gym")
+
+        with mock.patch.object(
+            CategoryStore, "remove", autospec=True, side_effect=OSError(5, "Input/output error")
+        ):
+            with self.assertRaises(BudgetAppError) as caught:
+                self.ctx.recurring.remove_category("gym")
+
+        self.assertIn("카테고리 삭제 도중 실패", caught.exception.message)
+        self.assertIn("완료: 없음 / 남음: 카테고리 'gym' 삭제", caught.exception.hint)
 
     def test_backup_copies_data_files_into_timestamped_folder(self) -> None:
         self.ctx.ledger.add_transaction(expense("2024-01-01", 1000))

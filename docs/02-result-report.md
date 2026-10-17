@@ -10,9 +10,9 @@
 | 필수 기능 10종 | 모두 구현 |
 | 보너스 4종 (백업, 반복 내역, 표 정렬, 저장 원자성) | 모두 구현 |
 | 외부 라이브러리 | 사용하지 않음 (표준 라이브러리만) |
-| 자동 테스트 | 101개 통과 (Python 3.13.5, 3.10.12 양쪽) |
+| 자동 테스트 | 110개 통과 (Python 3.13.5, 3.10.12 양쪽) |
 | 줄 실행률 | 전체 약 99% (표준 라이브러리 `trace` 로 측정, 모듈별 최저 80%) |
-| 코드 규모 | 앱 19개 파일 약 2,040줄, 테스트 약 1,220줄 |
+| 코드 규모 | 앱 19개 파일 약 2,210줄, 테스트 약 1,380줄 |
 | 타입 검사 | `mypy --strict budget_app` 오류 0건 (mypy 2.4.0) |
 | 고정한 선택 | JSONL / `update` 옵션 방식 / 기본 카테고리 자동 생성 |
 
@@ -30,7 +30,7 @@
 | 6 | `category add/list/remove` (사용 중 처리) | `services.add_category`, `recurring.remove_category` | `test_category_commands`, `test_category_in_use_cannot_be_removed_without_replacement` |
 | 7 | `update --id` (옵션 방식 고정) | `commands.cmd_update`, `services.update_transaction` | `test_update_and_delete_by_id`, `test_update_failures_leave_data_untouched` |
 | 8 | `delete --id`, 없는 id 처리 | `services.delete_transaction` | `test_delete_removes_one_and_unknown_id_is_not_found` |
-| 9 | `import --from`, `export --out` + 건수 출력 | `csv_io.py` | `test_export_then_import_round_trips`, `test_import_skips_invalid_rows_with_reasons`, `test_strict_import_registers_nothing_when_any_row_is_invalid` |
+| 9 | `import --from`, `export --out` + 건수 출력 | `csv_io.py` | `test_export_then_import_round_trips`, `test_import_skips_invalid_rows_with_reasons`, `test_strict_import_registers_nothing_when_any_row_is_invalid`, `test_skip_duplicates_ignores_rows_already_stored_and_repeated_in_file` |
 | 10 | 3개 이상 파일로 영구 저장, README | `config.DataPaths`, `README.md` | `test_first_run_creates_files_and_default_categories` |
 
 ### 2.2 기능 요구사항 세부
@@ -258,6 +258,12 @@ $ head -3 data/transactions.jsonl
 | `import --strict` | 한 행이라도 잘못됨 | 아무것도 등록하지 않음 | 1 | `test_strict_import_exits_with_error_and_writes_nothing` |
 | `import` | 1만 행 CSV | 전부 등록, 약 1초 | 0 | `test_large_csv_import_registers_every_row_in_one_append` |
 | `import` | 3행 중 2행 쓴 뒤 디스크 가득 참 | 쓴 2행은 읽을 수 있고, 재실행 시 새 id(겹치지 않음) | 1 | `test_interrupted_import_leaves_readable_file_and_never_reuses_ids` |
+| `import --skip-duplicates` | 저장된 거래와 같은 행, 같은 파일 두 번 import | 저장된 개수만큼 `이미 있는 거래` 로 건너뜀(파일 안의 실제 반복은 등록). `--strict` 와 함께 써도 중복은 실패 사유 아님 | 0 | `test_skip_duplicates_ignores_rows_already_stored_and_repeated_in_file`, `test_strict_import_with_skip_duplicates_only_fails_on_invalid_rows` |
+| `budget remove` | 설정되지 않은 달 | `예산이 설정되어 있지 않습니다` | 1 | `test_budget_remove_command` |
+| `category remove --replace-with` | 마지막 단계(카테고리 삭제)에서 I/O 실패 | `완료: 거래 1건 ... / 남음: 카테고리 'gym' 삭제` 힌트 | 1 | `test_failure_at_last_step_reports_moved_counts_and_remaining_step` |
+| `category remove` | 첫 단계에서 I/O 실패 | `완료: 없음 / 남음: 카테고리 'gym' 삭제` 힌트 | 1 | `test_failure_before_any_step_reports_nothing_done` |
+| `search` | `config.SEARCH_DEFAULT_LIMIT=2` 설정, `--limit` 없음 | 2건만 표시하고 `기본 상한 2건` 안내 | 0 | `test_search_default_cap_from_config_applies_when_limit_is_omitted` |
+| 29가지 조합 | 핵심 명령의 실패 입력 29개 | 기대 종료 코드(0/1/2)를 한 표로 고정 | 표 참조 | `test_exit_codes_per_failure_case` |
 | `recurring apply` | 규칙의 카테고리가 지워진 뒤 | 그 규칙만 `실패` 로 보고 | 1 | `test_export_by_date_range_and_recurring_failure_report` |
 | `backup` | 같은 초에 두 번 실행 | `같은 시각의 백업이 이미 있습니다` | 1 | `test_backup_copies_data_files_into_timestamped_folder` |
 | 모든 명령 | 깨진 `transactions.jsonl` | 몇 번째 줄인지 알려 주고 종료(스택트레이스 없음) | 1 | `test_corrupted_data_file_is_reported_without_traceback` |
@@ -298,7 +304,7 @@ $ python -m budget_app backup
 $ python -m unittest discover -s tests -t .
 .................................................................................................
 ----------------------------------------------------------------------
-Ran 101 tests in 1.823s
+Ran 110 tests in 2.012s
 
 OK
 ```
@@ -307,8 +313,8 @@ OK
 | --- | --- | --- |
 | `tests/test_validators_models.py` | 검증 함수, 모델 | 18 |
 | `tests/test_storage.py` | JSONL 입출력, 원자적 쓰기, 저장소 | 18 |
-| `tests/test_services.py` | 서비스, CSV(1만 행·중단 포함), 반복 내역, 백업 | 32 |
-| `tests/test_cli.py` | 명령 실행(E2E), 데코레이터, 표 정렬 | 33 |
+| `tests/test_services.py` | 서비스, CSV(1만 행·중단·중복 포함), 반복 내역, 백업 | 37 |
+| `tests/test_cli.py` | 명령 실행(E2E, 종료 코드 29가지 표 포함), 데코레이터, 표 정렬 | 37 |
 
 - Python 3.13.5와 3.10.12에서 모두 통과했습니다.
 - 줄 실행률은 `python -m trace --count --missing` 으로 측정했습니다. 측정된 18개 모듈 중 15개가 100%이고,
@@ -363,6 +369,19 @@ OK
 | 대용량·중단 테스트 | 1만 행 CSV import(약 1초), 덧붙이는 도중 디스크 오류 시 파일 상태와 id 재사용 금지 검증 |
 | 타입 검사 | `mypy --strict` 가 지적한 6곳(핸들러·파서 타입, 제네릭 인자)을 고쳐 오류 0건 |
 
+## 7.3 2차 AI 사전평가 보완 제안 반영 (2026-10-17)
+
+1차 반영 뒤 다시 받은 사전평가(16/16 통과)의 제안을 반영했습니다. 항목별 조치는 [04-evaluation-checklist.md](04-evaluation-checklist.md) 의 두 번째 반영표에 있습니다. 코드가 바뀐 것은 아래입니다.
+
+| 보완 | 내용 |
+| --- | --- |
+| `import --skip-duplicates` | 계획으로만 있던 중복 감지를 구현. 날짜·타입·카테고리·금액·메모가 같은 거래를 저장된 개수만큼 건너뛰고(같은 파일 재입력은 멱등, 실제 반복 거래는 보존) 사유를 보고. 테스트 3개 |
+| `budget remove --month` | 예산 삭제 명령 추가. 요약에서 예산 줄과 경고가 사라지는 것을 테스트로 확인 |
+| 카테고리 대체 실패 시 진행 상황 출력 | `StepFailedError` 로 `완료: ... / 남음: ...` 힌트를 출력. 규칙 이동 뒤 실패, 마지막 단계 실패, 아무것도 못 한 경우 세 가지 테스트 |
+| `config.SEARCH_DEFAULT_LIMIT` | `--limit` 없는 `search` 의 기본 상한(기본값 None=전체). 설정하면 그 건수만 보여 주고 안내 |
+| 종료 코드 표 테스트 | 핵심 명령의 실패 입력 29가지에 기대 종료 코드를 명시한 `test_exit_codes_per_failure_case` |
+| 예기치 못한 오류 힌트 | 재현 보고에 필요한 최소 정보(명령 전체, `--verbose` 마지막 `[log]` 줄)를 힌트에 명시. `handle_errors` docstring 에 예외→종료 코드 표 |
+
 ## 8. 알려진 한계
 
 고치지 않고 남겨 둔 항목입니다.
@@ -371,7 +390,7 @@ OK
   한 사람이 한 터미널에서 쓰는 프로그램이라는 전제로 파일 잠금은 넣지 않았습니다.
 - **반복 내역의 중복 방지는 태그에 의존합니다.** 생성된 거래의 `recurring:RC-0001` 태그를 `update --tags` 로 지우거나 날짜를 다른 달로 옮기면 같은 달에 다시 생성됩니다.
 - **수정·삭제·조회 시간은 파일 크기에 비례합니다.** 인덱스가 없어 30만 건에서 수 초가 걸립니다.
-- **`search` 에 `--limit` 이 없으면** 조건에 맞는 결과를 모두 모아 정렬합니다. 1,000건을 넘으면 `--limit` 을 권하는 안내만 띄우고 막지는 않습니다.
+- **`search` 에 `--limit` 이 없으면** 조건에 맞는 결과를 모두 모아 정렬합니다. 1,000건을 넘으면 `--limit` 을 권하는 안내만 띄우고 막지는 않습니다. 상한을 강제하려면 `config.SEARCH_DEFAULT_LIMIT` 에 숫자를 넣습니다(옵션이 아닌 상수인 이유: 한 사람이 쓰는 프로그램이고, 스크립트에서 전체 결과를 기대하는 쪽이 기본이라고 보았기 때문).
 - **`-` 로 시작하는 값**은 `--memo=-abc` 처럼 `=` 로 붙여 써야 합니다(`argparse` 의 동작).
-- **같은 CSV를 두 번 `import` 하면** 중복 검사 없이 두 번 등록됩니다. `--skip-duplicates` 옵션을 다음 단계로 계획했습니다([03-evaluation-answers.md Q16](03-evaluation-answers.md)).
+- **같은 CSV를 두 번 `import` 하면** 기본으로는 두 번 등록됩니다. `--skip-duplicates` 를 붙여야 건너뛰며, 기준은 날짜·타입·카테고리·금액·메모입니다(태그 제외).
 - **`import` 가 덧붙이는 도중 중단되면** 그때까지 쓰인 행만 남고 자동으로 되돌리지 않습니다. 파일은 읽을 수 있고 id 는 겹치지 않습니다.
