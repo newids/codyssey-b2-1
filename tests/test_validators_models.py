@@ -21,6 +21,7 @@ from budget_app.validators import (
     parse_positive_int,
     parse_recurring_day,
     parse_tags,
+    parse_transaction_id,
     parse_type,
 )
 
@@ -139,6 +140,22 @@ class ModelTests(unittest.TestCase):
         ):
             with self.subTest(criteria=criteria):
                 self.assertFalse(criteria.matches(tx))
+
+    def test_transaction_id_is_normalized_and_bare_number_is_expanded(self) -> None:
+        self.assertEqual(parse_transaction_id(" tx-000012 "), "TX-000012")
+        self.assertEqual(parse_transaction_id("12"), "TX-000012")
+        self.assertEqual(parse_transaction_id("TX-12"), "TX-000012")
+        for bad in ("", "   ", "TX", "12a", "TX-"):
+            with self.subTest(bad=bad), self.assertRaises(ValidationError):
+                parse_transaction_id(bad)
+
+    def test_criteria_matches_transaction_id_exactly(self) -> None:
+        tx = Transaction("TX-000001", "expense", "2024-01-15", 15000, "food")
+
+        self.assertTrue(SearchCriteria(tx_id="TX-000001").matches(tx))
+        self.assertTrue(SearchCriteria(tx_id="TX-000001", category="food").matches(tx))
+        self.assertFalse(SearchCriteria(tx_id="TX-000002").matches(tx))
+        self.assertFalse(SearchCriteria(tx_id="TX-000001", category="rent").matches(tx))
 
     def test_criteria_rejects_reversed_range(self) -> None:
         with self.assertRaises(ValidationError):

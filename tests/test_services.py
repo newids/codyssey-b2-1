@@ -87,6 +87,27 @@ class LedgerTests(DataDirTestCase):
         self.assertEqual([tx.date for tx in limited], ["2024-02-01"])
         self.assertEqual(self.ledger.search(SearchCriteria(keyword="없는말")), [])
 
+    def test_search_by_id_returns_at_most_one_and_honours_other_conditions(self) -> None:
+        self.seed()
+
+        by_id = self.ledger.search(SearchCriteria(tx_id="TX-000003"))
+        mismatched = self.ledger.search(SearchCriteria(tx_id="TX-000003", category="rent"))
+        missing = self.ledger.search(SearchCriteria(tx_id="TX-000404"))
+
+        self.assertEqual([tx.id for tx in by_id], ["TX-000003"])
+        self.assertEqual(by_id[0].memo, "회사 점심")
+        self.assertEqual(mismatched, [])
+        self.assertEqual(missing, [])
+
+    def test_require_transaction_returns_match_or_raises_not_found(self) -> None:
+        self.seed()
+
+        self.assertEqual(self.ledger.require_transaction("TX-000004").category, "rent")
+        with self.assertRaises(NotFoundError) as caught:
+            self.ledger.require_transaction("TX-000404")
+        self.assertIn("TX-000404", caught.exception.message)
+        self.assertIn("list", caught.exception.hint)
+
     def test_search_filters_by_amount_range_inclusive(self) -> None:
         self.ledger.add_transactions(
             [expense("2024-03-01", 4999), expense("2024-03-02", 5000), expense("2024-03-03", 20000)]

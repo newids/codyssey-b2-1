@@ -76,6 +76,29 @@ class CliFlowTests(DataDirTestCase):
         self.assertIn("조건에 맞는 거래가 없습니다", nothing.out)
         self.assertEqual(reversed_range.code, 1)
 
+    def test_list_and_search_find_a_transaction_directly_by_id(self) -> None:
+        for answers in (RENT, LUNCH, SALARY):
+            self.add(*answers)
+
+        listed = self.run_cli("list", "--id", "TX-000002")
+        bare_number = self.run_cli("list", "--id", "2")
+        searched = self.run_cli("search", "--id", "tx-000002", "--type", "expense")
+        no_match = self.run_cli("search", "--id", "TX-000002", "--type", "income")
+        missing = self.run_cli("list", "--id", "TX-000404")
+        malformed = self.run_cli("search", "--id", "abc")
+
+        self.assertEqual(listed.code, 0)
+        self.assertEqual(listed.out.count("TX-"), 1)
+        self.assertIn("점심", listed.out)
+        self.assertEqual(bare_number.out, listed.out)
+        self.assertIn("TX-000002", searched.out)
+        self.assertIn("(총 1건)", searched.out)
+        self.assertIn("조건에 맞는 거래가 없습니다", no_match.out)
+        self.assertEqual(missing.code, 1)
+        self.assertIn("없는 데이터입니다: id=TX-000404", missing.err)
+        self.assertEqual(malformed.code, 1)
+        self.assertIn("[힌트]", malformed.err)
+
     def test_search_by_amount_range(self) -> None:
         for answers in (RENT, LUNCH, SALARY):
             self.add(*answers)

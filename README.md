@@ -10,6 +10,7 @@ Python 표준 라이브러리만으로 만든 파일 기반 콘솔 가계부입�
 | [docs/02-result-report.md](docs/02-result-report.md) | 수행 결과 보고서 (요구사항 충족표, 실행 화면, 테스트 결과) |
 | [docs/03-evaluation-answers.md](docs/03-evaluation-answers.md) | 평가 답변서 (과제 목표 5문항 + 예상 질문) |
 | [docs/04-evaluation-checklist.md](docs/04-evaluation-checklist.md) | 평가항목 체크리스트별 답변과 근거 위치 |
+| [docs/05-demo-guide.md](docs/05-demo-guide.md) | 시연 가이드 (10분 시연 순서, 명령별 기대 출력과 설명 포인트, 리허설 스크립트) |
 
 ## 1. 실행 방법
 
@@ -38,8 +39,8 @@ python -m budget_app summary --help    # 명령별 사용법
 | 명령 | 입력 방식 | 설명 |
 | --- | --- | --- |
 | `add` | 대화형 | 거래 추가, 생성된 id 출력 |
-| `list [--limit N]` | 옵션 | 최신순 목록 (기본 10건) |
-| `search [--from] [--to] [--category] [--type] [--q] [--tag] [--min-amount] [--max-amount] [--limit]` | 옵션 | 조건 검색, 최신순. 금액 범위는 양 끝 포함 |
+| `list [--limit N]` / `list --id ID` | 옵션 | 최신순 목록 (기본 10건). `--id` 를 주면 그 거래 한 건만 출력 |
+| `search [--id] [--from] [--to] [--category] [--type] [--q] [--tag] [--min-amount] [--max-amount] [--limit]` | 옵션 | 조건 검색, 최신순. 금액 범위는 양 끝 포함. `--id` 는 다른 조건과 함께 쓸 수 있음 |
 | `summary --month YYYY-MM [--top N]` | 옵션 | 총수입/총지출/잔액, 예산 사용률, 지출 TOP N (기본 3) |
 | `budget set --month YYYY-MM --amount 금액` | 옵션 | 월 예산 저장 (`budget show --month`, `budget list` 로 조회, `budget remove --month` 로 삭제) |
 | `category add [--name]` / `list` / `remove [--name] [--replace-with]` | 대화형 또는 옵션 | 카테고리 관리 |
@@ -83,6 +84,13 @@ TX-000010 | 2024-01-12 | expense | transport |   20000 |      |
 $ python -m budget_app search --from 2024-01-01 --to 2024-01-31 --category food --tag meal
 $ python -m budget_app search --type expense --q 점심 --limit 5
 $ python -m budget_app search --type expense --min-amount 50000      # 5만원 이상 지출만
+
+$ python -m budget_app list --id TX-000012                           # id 로 바로 찾기 (--id 12 도 같음)
+ID        | 날짜       | 타입    | 카테고리 |  금액 | 메모 | 태그
+----------+------------+---------+----------+-------+------+-----
+TX-000012 | 2024-01-15 | expense | food     | 15000 | 점심 | meal
+$ python -m budget_app search --id 12 --type income                  # id 에 다른 조건을 겹치면 그 한 건에 적용
+조건에 맞는 거래가 없습니다.
 
 $ python -m budget_app budget set --month 2024-01 --amount 500000
 [저장 완료] 2024-01 예산 500000원
@@ -247,6 +255,7 @@ $ python -m budget_app import --from bank.csv --strict && echo "등록 완료" |
 | --- | --- | --- |
 | `등록되지 않은 카테고리입니다: cafe` | 카테고리를 만들기 전에 사용 | `category add --name cafe` 뒤에 다시 실행 |
 | `없는 데이터입니다: id=TX-...` | 오타, 또는 이미 삭제한 id | `list` / `search` 로 id 확인 |
+| `거래 id 형식이 올바르지 않습니다: abc` | `--id` 에 `TX-숫자` 나 숫자가 아닌 값 | `--id TX-000012` 또는 `--id 12` |
 | `'food' 카테고리를 사용하는 거래가 N건 있어 삭제할 수 없습니다.` | 사용 중인 카테고리 삭제 | `--replace-with <다른 카테고리>` 를 붙여 옮긴 뒤 삭제 |
 | `저장 파일을 읽을 수 없습니다: ... N번째 줄` | 손으로 고치다 JSON 한 줄이 깨짐 | 그 줄을 고치거나 `backups/` 의 복사본으로 복구 |
 | `파일을 처리할 수 없습니다: Permission denied (...)` | 데이터 폴더에 쓰기 권한 없음 | 폴더 권한 수정, 또는 `--data-dir` 로 다른 폴더 지정 |
@@ -299,6 +308,7 @@ ID        | 날짜       | 타입    | 카테고리 |  금액 | 메모 | 태그
 - 한 번에 한 프로세스만 쓰는 것을 전제로 합니다. 같은 데이터 폴더에 여러 프로세스가 동시에 쓰면 id가 겹칠 수 있습니다.
 - 같은 CSV를 두 번 `import` 하면 기본으로는 두 번 등록됩니다. `--skip-duplicates` 를 붙여야 건너뜁니다(중복 기준은 §5).
 - `search` 에 `--limit` 이 없으면 일치한 결과를 모두 모아 정렬합니다. 결과가 1,000건을 넘으면 `--limit` 사용을 권하는 안내를 표준 오류에 먼저 출력합니다. 항상 상한을 두고 싶으면 `config.SEARCH_DEFAULT_LIMIT` 에 숫자를 넣으세요. 그러면 `--limit` 없는 `search` 가 그 건수까지만 보여 주고 안내합니다.
+- `--id` 는 `TX-000012` 와 `12` 를 같은 id 로 받고(`tx-000012` 도 가능), `list --id` 는 없는 id 면 `없는 데이터` 오류(코드 1), `search --id` 는 다른 조건까지 맞지 않으면 빈 결과(코드 0)입니다. id 는 유일하므로 `search --id` 는 첫 일치에서 파일 읽기를 멈춥니다.
 - `recurring apply` 는 생성한 거래의 `recurring:<규칙 id>` 태그로 중복을 막습니다. 이 태그를 지우면 같은 달에 다시 생성됩니다.
 
 ## 7. 구조

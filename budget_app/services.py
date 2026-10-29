@@ -62,6 +62,10 @@ class BudgetService:
     @log_call
     @timed
     def search(self, criteria: SearchCriteria, limit: int | None = None) -> list[Transaction]:
+        if criteria.tx_id is not None:
+            # id 는 유일하므로 첫 일치에서 읽기를 멈추고, 나머지 조건은 그 한 건에만 적용한다.
+            found = self._transactions.find_by_id(criteria.tx_id)
+            return [found] if found is not None and criteria.matches(found) else []
         matches = self.iter_matching(criteria)
         if limit is None:
             return sorted(matches, key=_sort_key, reverse=True)
@@ -76,14 +80,14 @@ class BudgetService:
                 "수정할 항목이 없습니다.",
                 hint="--date, --type, --category, --amount, --memo, --tags 중 하나 이상을 지정하세요.",
             )
-        current = self._require_transaction(tx_id)
+        current = self.require_transaction(tx_id)
         updated = replace(current, **changes)
         self.require_category(updated.category)
         self._transactions.rewrite(lambda tx: updated if tx.id == tx_id else tx)
         return updated
 
     def delete_transaction(self, tx_id: str) -> Transaction:
-        target = self._require_transaction(tx_id)
+        target = self.require_transaction(tx_id)
         self._transactions.rewrite(lambda tx: None if tx.id == tx_id else tx)
         return target
 
@@ -209,7 +213,8 @@ class BudgetService:
             )
         return normalized
 
-    def _require_transaction(self, tx_id: str) -> Transaction:
+    def require_transaction(self, tx_id: str) -> Transaction:
+        """id 로 거래 한 건을 찾는다. 없으면 NotFoundError."""
         found = self._transactions.find_by_id(tx_id)
         if found is None:
             raise NotFoundError(

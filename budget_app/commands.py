@@ -25,6 +25,7 @@ from .validators import (
     parse_positive_int,
     parse_recurring_day,
     parse_tags,
+    parse_transaction_id,
     parse_type,
 )
 
@@ -46,6 +47,10 @@ def cmd_add(args: argparse.Namespace, ctx: AppContext) -> int:
 
 
 def cmd_list(args: argparse.Namespace, ctx: AppContext) -> int:
+    if args.id is not None:
+        found = ctx.ledger.require_transaction(parse_transaction_id(args.id))
+        print("\n".join(format_transactions([found])))
+        return EXIT_OK
     limit = parse_positive_int(args.limit, "--limit")
     transactions = ctx.ledger.list_recent(limit)
     if not transactions:
@@ -57,6 +62,7 @@ def cmd_list(args: argparse.Namespace, ctx: AppContext) -> int:
 
 def cmd_search(args: argparse.Namespace, ctx: AppContext) -> int:
     criteria = SearchCriteria(
+        tx_id=_optional(args.id, parse_transaction_id),
         date_from=_optional(args.date_from, parse_date),
         date_to=_optional(args.date_to, parse_date),
         category=_optional(args.category, ctx.ledger.require_category),
@@ -168,14 +174,14 @@ def cmd_category_remove(args: argparse.Namespace, ctx: AppContext) -> int:
 
 def cmd_update(args: argparse.Namespace, ctx: AppContext) -> int:
     changes = _collect_changes(args, ctx)
-    updated = ctx.ledger.update_transaction(args.id.strip(), changes)
+    updated = ctx.ledger.update_transaction(parse_transaction_id(args.id), changes)
     print(f"[수정 완료] id={updated.id}")
     print("\n".join(format_transactions([updated])))
     return EXIT_OK
 
 
 def cmd_delete(args: argparse.Namespace, ctx: AppContext) -> int:
-    deleted = ctx.ledger.delete_transaction(args.id.strip())
+    deleted = ctx.ledger.delete_transaction(parse_transaction_id(args.id))
     print(f"[삭제 완료] id={deleted.id} ({deleted.date} {deleted.category} {deleted.amount}원)")
     return EXIT_OK
 

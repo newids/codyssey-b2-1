@@ -106,9 +106,13 @@ def _add_report_commands(add_command: AddCommand) -> None:
     listing.add_argument(
         "--limit", default=str(DEFAULT_LIST_LIMIT), help=f"출력 건수 (기본값: {DEFAULT_LIST_LIMIT})"
     )
+    listing.add_argument(
+        "--id", help="이 id 의 거래 한 건만 출력 (예: TX-000012 또는 12). 지정하면 --limit 은 무시"
+    )
     listing.set_defaults(handler=commands.cmd_list)
 
     search = add_command("search", "조건으로 거래 검색 (최신순)")
+    search.add_argument("--id", help="거래 id (예: TX-000012 또는 12). 다른 조건과 함께 쓸 수 있음")
     search.add_argument("--from", dest="date_from", metavar="YYYY-MM-DD", help="시작일(포함)")
     search.add_argument("--to", dest="date_to", metavar="YYYY-MM-DD", help="종료일(포함)")
     search.add_argument("--category", help="카테고리")

@@ -23,6 +23,8 @@ MAX_AMOUNT_DIGITS = 15
 _DATE_PATTERN = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 _MONTH_PATTERN = re.compile(r"[0-9]{4}-[0-9]{2}")
 _DIGITS_PATTERN = re.compile(rf"[0-9]{{1,{MAX_AMOUNT_DIGITS}}}")
+_TRANSACTION_ID_PATTERN = re.compile(r"(?:TX-)?([0-9]+)")
+TRANSACTION_ID_WIDTH = 6
 _GROUPED_DIGITS_PATTERN = re.compile(r"[0-9]{1,3}(,[0-9]{3})+")
 
 
@@ -99,6 +101,17 @@ def parse_category_name(text: str) -> str:
             hint="예: food, living-cost",
         )
     return value
+
+
+def parse_transaction_id(text: str) -> str:
+    """'tx-000012', 'TX-12', '12' -> 'TX-000012'. 그 밖의 형식은 오류."""
+    matched = _TRANSACTION_ID_PATTERN.fullmatch(text.strip().upper())
+    if matched is None:
+        raise ValidationError(
+            f"거래 id 형식이 올바르지 않습니다: {text.strip() or '(빈 값)'}",
+            hint="예: --id TX-000012 (숫자만 써도 됩니다: --id 12)",
+        )
+    return f"TX-{int(matched.group(1)):0{TRANSACTION_ID_WIDTH}d}"
 
 
 def parse_positive_int(text: str, label: str) -> int:

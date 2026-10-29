@@ -198,6 +198,7 @@ class SearchCriteria:
     tag: str | None = None
     min_amount: int | None = None
     max_amount: int | None = None
+    tx_id: str | None = None
 
     def __post_init__(self) -> None:
         if self.date_from and self.date_to and self.date_from > self.date_to:
@@ -216,6 +217,8 @@ class SearchCriteria:
             )
 
     def matches(self, tx: Transaction) -> bool:
+        if self.tx_id and tx.id != self.tx_id:
+            return False
         if self.date_from and tx.date < self.date_from:
             return False
         if self.date_to and tx.date > self.date_to:
